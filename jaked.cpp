@@ -31,6 +31,7 @@ struct {
     std::string PROMPT = "* ";
     std::list<std::string> lines;
     std::map<char, decltype(lines)::iterator> registers;
+    std::string diagnostic;
 } g_state;
 
 struct Range
@@ -102,6 +103,19 @@ namespace CommandsImpl {
         exit(0);
     }
 
+    void p(Range r, std::string)
+    {
+        int first = std::min(1, r.first);
+        int second = std::min(1, r.second);
+        auto a = g_state.lines.begin();
+        auto b = g_state.lines.begin();
+        std::advance(a, r.first - 1);
+        std::advance(b, r.second - 1);
+        for(auto it = a; it != b; ++it) {
+            printf("%s\n", it->c_str());
+        }
+    }
+
 }
 
 int SkipWS(std::string const& s, int i)
@@ -111,6 +125,7 @@ int SkipWS(std::string const& s, int i)
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
+    { 'p', &CommandsImpl::p },
     { 'r', &CommandsImpl::r },
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
@@ -220,19 +235,9 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
     }
 }
 
-void ParseCommand()
+// [Range, command, tail]
+std::tuple<Range, char, std::string> ParseCommand(std::string s)
 {
-    std::stringstream ss;
-    if(ctrlc) return;
-    while(std::cin.good()) {
-        char c;
-        std::cin >> c;
-        if(c == '\n') break;
-        ss << c;
-        if(ctrlc) return;
-    }
-
-    auto s = ss.str();
     size_t i = 0;
     Range r;
     bool whitespacing = true;
@@ -242,22 +247,60 @@ void ParseCommand()
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(r, i) = ParseRange(s, i);
+            break;
         case '\'':
             std::tie(r, i) = ParseRange(s, i);
             break;
-            break;
     }
-
-    // skip ws
-    // parse range
-    // get tail
-    // invoke command
+    switch(s[i]) {
+        case '\0':
+            return std::make_tuple(r, 'p', std::string());
+        case 'p': case 'g': case 'G': case 'v': case 'V':
+        case 'u': case 'P': case 'H': case 'h': case '#':
+        case 'k': case 'i': case 'a': case 'c': case 'd':
+        case 'j': case 'm': case 't': case 'y':
+        case 'x': case 'r': case 'l': case 'z': case '=':
+        case 'W': case 'e': case 'E': case 'f': case 'w':
+        case 'q': case 'Q':
+        case '\n':
+            return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
+        default:
+            throw std::runtime_error("Syntax error");
+    }
 }
 
 void Loop()
 {
     while(1) {
-        ParseCommand();
+        Range r;
+        char command;
+        std::string tail;
+        try {
+            do {
+                std::stringstream ss;
+                if(ctrlc) return;
+                while(std::cin.good()) {
+                    char c;
+                    std::cin >> c;
+                    if(c == '\n') break;
+                    ss << c;
+                    if(ctrlc) return;
+                }
+                auto s = ss.str();
+
+                std::tie(r, command, tail) = ParseCommand(s);
+                if(ctrlc) break;
+                Commands.at(command)(r, tail);
+                g_state.diagnostic = "";
+            } while(0);
+        } catch(std::exception& ex) {
+            printf("?\n");
+            g_state.diagnostic = ex.what();
+        } catch(...) {
+            printf("?\n");
+            g_state.diagnostic = "???";
+        }
+
         while(InterlockedCompareExchange(&ctrlc, 0, 1) != 0){};
     }
 }
