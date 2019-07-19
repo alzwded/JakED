@@ -18,11 +18,23 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <map>
 #include <sstream>
 #include <functional>
+#include <cstdarg>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #define NOMINMAX
 #include <windows.h>
+
+int Interactive_readCharFn()
+{
+    if(feof(stdin)) return EOF;
+    return fgetc(stdin);
+}
+
+void Interactive_writeStringFn(std::string const& s)
+{
+    printf("%s", s.c_str());
+}
 
 volatile DWORD ctrlc = 0;
 struct {
@@ -32,6 +44,9 @@ struct {
     std::list<std::string> lines;
     std::map<char, decltype(lines)::iterator> registers;
     std::string diagnostic;
+    bool dirty = false;
+    std::function<char()> readCharFn;
+    std::function<void(std::string)> writeStringFn;
 } g_state;
 
 struct Range
@@ -97,10 +112,10 @@ namespace CommandsImpl {
     void r(Range range, std::string tail)
     {
         tail = tail.substr(SkipWS(tail, 0));
+        size_t bytes = 0;
         if(tail[0] == '!') {
             throw std::runtime_error("shell execution is not implemented");
         }
-        g_state.filename = tail;
         FILE* f = fopen(tail.c_str(), "r");
         if(f) {
             auto after = g_state.lines.begin();
@@ -108,6 +123,7 @@ namespace CommandsImpl {
             std::stringstream line;
             int c;
             while(!feof(f) && (c = fgetc(f)) != EOF) {
+                ++bytes;
                 if(c == '\n') {
                     after = g_state.lines.insert(after, line.str());
                     ++after;
@@ -120,24 +136,53 @@ namespace CommandsImpl {
                 g_state.lines.insert(after, line.str());
                 ++after;
             }
+            g_state.dirty = true;
+            g_state.line = (int)std::distance(g_state.lines.begin(), after);
+            {
+                std::stringstream output;
+                output << bytes << std::endl;
+                g_state.writeStringFn(output.str());
+            }
+            //printf("%zd %d", g_state.lines.size(), g_state.line);
         }
+    }
+
+    void E(Range range, std::string tail)
+    {
+        tail = tail.substr(SkipWS(tail, 0));
+        if(tail[0] == '!') {
+            throw std::runtime_error("shell execution is not implemented");
+        } else {
+            g_state.filename = tail;
+        }
+        g_state.lines.clear();
+        g_state.registers.clear();
+        r(Range::S(0), tail);
+        g_state.dirty = false;
+        if(g_state.lines.empty()) g_state.lines.emplace_back();
     }
 
     void e(Range range, std::string tail)
     {
-        g_state.lines.clear();
-        r(Range::S(0), tail);
-        if(g_state.lines.empty()) g_state.lines.emplace_back();
+        if(g_state.dirty) throw std::runtime_error("file has modifications");
+        return E(range, tail);
     }
 
-    void q(Range r, std::string tail)
+    void h(Range range, std:: string tail)
     {
-        throw std::runtime_error("not implemented");
+        g_state.writeStringFn(g_state.diagnostic);
+        g_state.writeStringFn("\n");
     }
 
     void Q(Range r, std::string tail)
     {
         exit(0);
+    }
+
+    void q(Range range, std::string tail)
+    {
+        if(g_state.dirty) throw std::runtime_error("file has modifications");
+        return Q(range, tail);
     }
 
     void p(Range r, std::string)
@@ -149,8 +194,10 @@ namespace CommandsImpl {
         std::advance(a, r.first - 1);
         std::advance(b, r.second);
         for(auto it = a; it != b; ++it) {
-            printf("%s\n", it->c_str());
+            g_state.writeStringFn(*it);
+            g_state.writeStringFn("\n");
         }
+        g_state.line = std::distance(g_state.lines.begin(), b);
     }
 
 }
@@ -158,9 +205,11 @@ namespace CommandsImpl {
 std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'p', &CommandsImpl::p },
     { 'e', &CommandsImpl::e },
+    { 'E', &CommandsImpl::e },
     { 'r', &CommandsImpl::r },
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
+    { 'h', &CommandsImpl::h },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -275,6 +324,10 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
     bool whitespacing = true;
     i = SkipWS(s, i);
     switch(s[i]) {
+        case '\0':
+            r = Range::S(Range::Dot(1));
+            break;
+        case 'p':
         case '+': case '-': case ',': case ';': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
@@ -312,7 +365,7 @@ void Loop()
                 std::stringstream ss;
                 if(ctrlc) return;
                 int ii = 0;
-                while(!feof(stdin) && (ii = fgetc(stdin)) != EOF) {
+                while((ii = g_state.readCharFn()) != EOF) {
                     char c = (char)(ii & 0xFF);
                     if(c == '\n') break;
                     ss << c;
@@ -326,10 +379,10 @@ void Loop()
                 g_state.diagnostic = "";
             } while(0);
         } catch(std::exception& ex) {
-            printf("?\n");
+            g_state.writeStringFn("?\n");
             g_state.diagnostic = ex.what();
         } catch(...) {
-            printf("?\n");
+            g_state.writeStringFn("?\n");
             g_state.diagnostic = "???";
         }
 
@@ -374,9 +427,12 @@ int main(int argc, char* argv[])
     }
 #endif
 
+    g_state.readCharFn = &Interactive_readCharFn;
+    g_state.writeStringFn = &Interactive_writeStringFn;
+
     std::string file = argv[1];
     if(file.empty()) exit_usage("No such file!", argv[0]);
-    Commands.at('e')(Range::ZERO(), file);
+    Commands.at('E')(Range::ZERO(), file);
 
     Loop();
     return 0;

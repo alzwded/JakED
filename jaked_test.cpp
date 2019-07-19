@@ -247,12 +247,18 @@ void DEFINE_SUITES() {
             } TEST_RUN_END();
         } END_TEST();
         DEF_TEST(ParseNothingWithCommandAfterIt) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
             TEST_RUN() {
                 Range r;
                 int i = 0;
                 std::tie(r, i) = ParseRange("pn", i);
-                ASSERT(r.first == 1);
-                ASSERT(r.second == 1);
+                ASSERT(r.first == 5);
+                ASSERT(r.second == 5);
                 ASSERT(i == 0);
             } TEST_RUN_END();
         } END_TEST();
@@ -421,6 +427,25 @@ void DEFINE_SUITES() {
                 std::tie(r, command, tail) = ParseCommand("f something");
                 ASSERT(command == 'f');
                 ASSERT(tail == "something");
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(Parse_p_n) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::tie(r, command, tail) = ParseCommand("pn");
+                ASSERT(r.first == 5);
+                ASSERT(r.second == 5);
+                ASSERT(command == 'p');
+                ASSERT(tail == "n");
             } TEST_RUN_END();
         } END_TEST();
 
