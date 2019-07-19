@@ -132,6 +132,14 @@ void DEFINE_SUITES() {
             ASSERT(3 == SkipWS("   p", 0));
         } END_TEST();
     } END_SUITE();
+    DEF_SUITE(ReadNumber) {
+        DEF_TEST(ReadNumber) {
+            int num, i;
+            std::tie(num, i) = ReadNumber("  123pq", 2);
+            ASSERT(num == 123);
+            ASSERT(i == 5);
+        } END_TEST();
+    } END_SUITE();
     DEF_SUITE(ParseRange) {
         SUITE_SETUP() {
             for(size_t i = 0; i < 10; ++i) {

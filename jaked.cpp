@@ -129,6 +129,46 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
     }
 }
 
+std::tuple<int, int> ReadNumber(std::string const& s, int i)
+{
+    i = SkipWS(s, i);
+    int left = 0;
+    while(s[i] >= '0' && s[i] <= '9') {
+        left = left * 10 + s[i] - '0';
+        ++i;
+    }
+    return std::make_tuple(left, i);
+}
+
+std::tuple<Range, int> ParseFromOffset(int from, std::string const& s, int i)
+{
+    int left = 0;
+    bool negative = (s[i] == '-');
+    ++i;
+    if(s[i] >= '0' && s[i] <= '9') {
+        std::tie(left, i) = ReadNumber(s, i);
+        left = (negative) ? from-left : from+left;
+    } else if(negative) {
+        left = from - 1;
+        while(s[i] == '-') {
+            ++i;
+            --left;
+        }
+    } else if(!negative) {
+        left = from + 1;
+        while(s[i] == '+') {
+            ++i;
+            ++left;
+        }
+    }
+    i = SkipWS(s, i);
+    if(s[i] == ',') {
+        return ParseFromComma(left, s, i);
+    } else {
+        return std::make_tuple(Range::S(left), i);
+    }
+}
+
 std::tuple<Range, int> ParseRange(std::string const& s, int i)
 {
     int left = 0;
@@ -143,43 +183,15 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
                     return ParseFromComma(Range::Dot(), s, i);
                 case '+':
                 case '-':
-                {
-                    bool negative = (s[i] == '-');
-                    ++i;
-                    // TODO switch s[i+1] see if it's a number
-                    if(s[i] >= '0' && s[i] <= '9') {
-                        left = 0;
-                        while(s[i] >= '0' && s[i] <= '9') {
-                            left = left * 10 + s[i] - '0';
-                            ++i;
-                        }
-                        if(0) {
-                        }
-                        left = (negative) ? Range::Dot()-left : Range::Dot()+left;
-                    } else if(negative) {
-                        left = Range::Dot() - 1;
-                        while(s[i] == '-') {
-                            ++i;
-                            --left;
-                        }
-                    } else if(!negative) {
-                        left = Range::Dot() + 1;
-                        while(s[i] == '+') {
-                            ++i;
-                            ++left;
-                        }
-                    }
-                    i = SkipWS(s, i);
-                    if(s[i] == ',') {
-                        return ParseFromComma(left, s, i);
-                    } else {
-                        return std::make_tuple(Range::S(left), i);
-                    }
-                }
+                    return ParseFromOffset(Range::Dot(), s, i);
                 default:
                     return std::make_tuple(Range::S(Range::Dot()), i);
             }
             break;
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+        {
+        }
         default:
             return std::make_tuple(Range::S(Range::Dot()), i);
     }
