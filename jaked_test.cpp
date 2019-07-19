@@ -329,6 +329,16 @@ void DEFINE_SUITES() {
                 ASSERT(i == 3);
             } TEST_RUN_END();
         } END_TEST();
+        DEF_TEST(ParseNumericRangeWithOffsetsAndTail) {
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("5-4,2+++p", i);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == 5);
+                ASSERT(i == 8);
+            } TEST_RUN_END();
+        } END_TEST();
 
 
         SUITE_TEARDOWN() {

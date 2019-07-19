@@ -169,6 +169,21 @@ std::tuple<Range, int> ParseFromOffset(int from, std::string const& s, int i)
     }
 }
 
+std::tuple<Range, int> ParseCommaOrOffset(int base, std::string const& s, int i)
+{
+    i = SkipWS(s, i);
+    switch(s[i]) {
+        case ',':
+            return ParseFromComma(base, s, i);
+        case '+':
+        case '-':
+            return ParseFromOffset(base, s, i);
+        default:
+            return std::make_tuple(Range::S(base), i);
+    }
+
+}
+
 std::tuple<Range, int> ParseRange(std::string const& s, int i)
 {
     int left = 0;
@@ -177,20 +192,12 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
             return ParseFromComma(1, s, i);
         case '.':
             ++i;
-            i = SkipWS(s, i);
-            switch(s[i]) {
-                case ',':
-                    return ParseFromComma(Range::Dot(), s, i);
-                case '+':
-                case '-':
-                    return ParseFromOffset(Range::Dot(), s, i);
-                default:
-                    return std::make_tuple(Range::S(Range::Dot()), i);
-            }
-            break;
+            return ParseCommaOrOffset(Range::Dot(), s, i);
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
         {
+            std::tie(left, i) = ReadNumber(s, i);
+            return ParseCommaOrOffset(left, s, i);
         }
         default:
             return std::make_tuple(Range::S(Range::Dot()), i);
