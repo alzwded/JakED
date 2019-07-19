@@ -45,7 +45,7 @@ struct Range
         return *this;
     }
     static int Dot(int offset = 0) { return g_state.line + offset; }
-    static int Dollar(int offset = 0) { return g_state.line + offset; }
+    static int Dollar(int offset = 0) { return g_state.lines.size() + offset; }
     static int Reg(char c) {
         auto found = g_state.registers.find(c);
         if(found == g_state.registers.end()) {
@@ -130,7 +130,7 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
     ++i;
     i = SkipWS(s, i);
     switch(s[i]) {
-        case ',': case '.': case '+': case '-':
+        case ',': case '.': case '+': case '-': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(temp, i) = ParseRange(s, i);
@@ -197,8 +197,11 @@ std::tuple<Range, int> ParseCommaOrOffset(int base, std::string const& s, int i)
 
 std::tuple<Range, int> ParseRange(std::string const& s, int i)
 {
+    i = SkipWS(s, i);
     int left = 0;
     switch(s[i]) {
+        case '$':
+            return std::make_tuple(Range::S(Range::Dollar()), i + 1);
         case ',':
             return ParseFromComma(1, s, i);
         case '.':
@@ -233,7 +236,7 @@ void ParseCommand()
     bool whitespacing = true;
     i = SkipWS(s, i);
     switch(s[i]) {
-        case '+': case '-': case ',': case ';':
+        case '+': case '-': case ',': case ';': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(r, i) = ParseRange(s, i);

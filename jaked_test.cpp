@@ -350,6 +350,16 @@ void DEFINE_SUITES() {
                 ASSERT(i == 8);
             } TEST_RUN_END();
         } END_TEST();
+        DEF_TEST(ParseWhitespaceOneDollar) {
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("   1,$p", i);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == g_state.lines.size());
+                ASSERT(i == 6);
+            } TEST_RUN_END();
+        } END_TEST();
 
 
         SUITE_TEARDOWN() {
