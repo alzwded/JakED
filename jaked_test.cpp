@@ -9,16 +9,24 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#define main jaked_main
-#include "jaked.cpp"
-#undef main
 
+#include <exception>
 struct test_error : std::exception
 {
     test_error(const char* what)
         : std::exception(what)
     {}
 };
+
+struct application_exit : std::exception
+{
+    application_exit() : std::exception("This should not be reported as an error") {}
+};
+
+#define main jaked_main
+#include "jaked.cpp"
+#undef main
+#include <memory>
 
 #define ASSERT(X)\
     do{ bool well = (X); \
@@ -31,13 +39,15 @@ struct test_error : std::exception
 
 struct ATEST {
     static void NONE() {}
-    static bool FAIL() { return false; }
-    ATEST(std::string name, std::function<void()> setup, std::function<bool()> run, std::function<void()> teardown)
+    static bool FAIL() { ASSERT(!"test body not defined"); return true; }
+    ATEST(std::string name, std::function<void()> setup, std::function<bool()> run, std::function<void()> teardown, void* extra)
         : m_name(name), m_setup(setup), m_run(run), m_teardown(teardown)
+        , m_extra(extra)
     {}
     std::string m_name;
     std::function<void()> m_setup, m_teardown;
     std::function<bool()> m_run;
+    void* m_extra;
 
     bool operator()() {
         bool failed = false;
@@ -45,6 +55,8 @@ struct ATEST {
         m_setup(); 
         try {
             failed = m_run();
+        } catch(application_exit&) {
+            failed = false;
         } catch(test_error&) {
             failed = true;
         } catch(std::exception& ex) {
@@ -90,29 +102,35 @@ std::map<std::string, SUITE*>& GetSuites()
 
 #define DEF_TEST(X) do{\
     std::string name = #X;\
-    std::function<void()> setup=&ATEST::NONE, teardown = &ATEST::NONE;\
-    std::function<bool()> run = &ATEST::FAIL;
+    void* TEST__extra = nullptr; \
+    std::function<void()> testsetup=&ATEST::NONE, testteardown = &ATEST::NONE;\
+    std::function<bool()> testrun = &ATEST::FAIL;
+
+#define TEST_SET_EXTRA(p) do{\
+    static_assert(std::is_pointer<decltype(p)>::value, "should be a pointer variable"); \
+    TEST__extra = p;\
+} while(0);
 
 #define TEST_SETUP()\
-    setup = std::function<void()>([]()
+    testsetup = std::function<void()>([=]()
 
 #define TEST_SETUP_END()\
     )
 
 #define TEST_TEARDOWN()\
-    teardown = std::function<void()>([]()
+    testteardown = std::function<void()>([=]()
 
 #define TEST_TEARDOWN_END()\
     )
 
 #define TEST_RUN() \
-    run = std::function<bool()>([]() -> bool{
+    testrun = std::function<bool()>([=]() -> bool{
 
 #define TEST_RUN_END()\
     return false;})
 
 #define END_TEST() \
-        suiterun.push_back(ATEST(name, setup, run, teardown));\
+        suiterun.push_back(ATEST(name, testsetup, testrun, testteardown, TEST__extra));\
     }while(0)
 
 
@@ -138,20 +156,24 @@ std::map<std::string, SUITE*>& GetSuites()
     }while(0)
 
 void DEFINE_SUITES() {
-    DEF_SUITE(SkipWS) {
+    DEF_SUITE(10_SkipWS) {
         DEF_TEST(SkipWS) {
-            ASSERT(3 == SkipWS("   p", 0));
+            TEST_RUN() {
+                ASSERT(3 == SkipWS("   p", 0));
+            } TEST_RUN_END();
         } END_TEST();
     } END_SUITE();
-    DEF_SUITE(ReadNumber) {
+    DEF_SUITE(20_ReadNumber) {
         DEF_TEST(ReadNumber) {
-            int num, i;
-            std::tie(num, i) = ReadNumber("  123pq", 2);
-            ASSERT(num == 123);
-            ASSERT(i == 5);
+            TEST_RUN() {
+                int num, i;
+                std::tie(num, i) = ReadNumber("  123pq", 2);
+                ASSERT(num == 123);
+                ASSERT(i == 5);
+            } TEST_RUN_END();
         } END_TEST();
     } END_SUITE();
-    DEF_SUITE(ParseRange) {
+    DEF_SUITE(30_ParseRange) {
         SUITE_SETUP() {
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
@@ -383,7 +405,7 @@ void DEFINE_SUITES() {
         } SUITE_TEARDOWN_END();
     } END_SUITE();
 
-    DEF_SUITE(ParseCommand) {
+    DEF_SUITE(40_ParseCommand) {
         SUITE_SETUP() {
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
@@ -463,6 +485,227 @@ void DEFINE_SUITES() {
         } END_TEST();
     } END_SUITE();
 
+    DEF_SUITE(80_Integration) {
+        SUITE_SETUP() {
+            g_state.line = 1;
+            g_state.lines.clear();
+            for(size_t i = 0; i < 20; ++i) {
+                std::stringstream ss;
+                ss << "Line " << (i + 1);
+                g_state.lines.push_back(ss.str());
+            }
+            g_state.registers.clear();
+            g_state.diagnostic = "";
+            g_state.dirty = false;
+        } SUITE_SETUP_END();
+        DEF_TEST(LoadFile) {
+            auto numLinesRead = new int(0);
+            TEST_SET_EXTRA(numLinesRead);
+            TEST_SETUP() {
+                auto statew = std::make_shared<int>(0);
+                g_state.writeStringFn = [statew, numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*statew) {
+                    case 0:
+                        (*statew)++;
+                        {
+                            int bytes = 0;
+                            try {
+                                bytes = std::atoi(s.c_str());
+                            } catch(...) {
+                                ASSERT(bytes > 0);
+                            }
+                        }
+                        break;
+                    default:
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('E')(Range(), "test\\twolines.txt");
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+        DEF_TEST(EditFileAndPrint) {
+            auto numLinesRead = new int(0);
+            TEST_SET_EXTRA(numLinesRead);
+            TEST_SETUP() {
+                auto statew = std::make_shared<int>(0);
+                g_state.writeStringFn = [statew, numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*statew) {
+                    case 0:
+                        (*statew)++;
+                        break;
+                    case 1:
+                        ASSERT(s == "This is line 1.\n");
+                        (*statew)++;
+                        break;
+                    case 2:
+                        ASSERT(s == "This is line 2.\n");
+                        (*statew)++;
+                        break;
+                    default:
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('E')(Range(), "test\\twolines.txt");
+                Commands.at('p')(Range::R(1, Range::Dollar()), "test\\twolines.txt");
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(CommentDoesNothing) {
+            auto numLinesRead = new int(0);
+            TEST_SET_EXTRA(numLinesRead);
+            TEST_SETUP() {
+                auto statew = std::make_shared<int>(0);
+                g_state.writeStringFn = [statew, numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*statew) {
+                   default:
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('#')(Range(), "bla bla bla");
+                ASSERT( (*numLinesRead) == 0);
+            } TEST_RUN_END();
+        } END_TEST();
+    } END_SUITE();
+
+    DEF_SUITE(90_System) {
+        SUITE_SETUP() {
+            g_state.line = 1;
+            g_state.lines.clear();
+            for(size_t i = 0; i < 20; ++i) {
+                std::stringstream ss;
+                ss << "Line " << (i + 1);
+                g_state.lines.push_back(ss.str());
+            }
+            g_state.registers.clear();
+            g_state.diagnostic = "";
+            g_state.dirty = false;
+        } SUITE_SETUP_END();
+        DEF_TEST(EditFileAndPrintAndExit) {
+            auto numLinesRead = new int(0);
+            TEST_SET_EXTRA(numLinesRead);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(E test\twolines.txt
+,p
+Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                auto statew = std::make_shared<int>(0);
+                g_state.writeStringFn = [statew, numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*statew) {
+                    case 0:
+                        (*statew)++;
+                        break;
+                    case 1:
+                        ASSERT(s == "This is line 1.\n");
+                        (*statew)++;
+                        break;
+                    case 2:
+                        ASSERT(s == "This is line 2.\n");
+                        (*statew)++;
+                        break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+        DEF_TEST(OutOfInputExits) {
+            auto numLinesRead = new int(0);
+            TEST_SET_EXTRA(numLinesRead);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(E test\twolines.txt
+,p
+#Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                auto statew = std::make_shared<int>(0);
+                g_state.writeStringFn = [statew, numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*statew) {
+                    case 0:
+                        (*statew)++;
+                        break;
+                    case 1:
+                        ASSERT(s == "This is line 1.\n");
+                        (*statew)++;
+                        break;
+                    case 2:
+                        ASSERT(s == "This is line 2.\n");
+                        (*statew)++;
+                        break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+    } END_SUITE();
+
+}
+
+VOID CALLBACK killSelf(PVOID lpParam, BOOLEAN TimerOrWaitFired)
+{
+    if(TimerOrWaitFired) {
+        fprintf(stderr, "Test suite max time hit\n");
+        fflush(stderr);
+        std::terminate();
+    }
 }
 
 int main(int argc, char* argv[])
@@ -470,6 +713,9 @@ int main(int argc, char* argv[])
     DEFINE_SUITES();
     argv0 = argv[0];
     if(argc == 1) {
+        HANDLE hTimer;
+        int allowedMaxTime = 5 * 1000;
+        CreateTimerQueueTimer(&hTimer, NULL, &killSelf, NULL, allowedMaxTime, 0, WT_EXECUTEONLYONCE);
         std::cout << "Running " << GetSuites().size() << " test suites" << std::endl;
         bool failed = false;
         std::list<std::string> failedSuites;

@@ -144,6 +144,8 @@ namespace CommandsImpl {
                 g_state.writeStringFn(output.str());
             }
             //printf("%zd %d", g_state.lines.size(), g_state.line);
+        } else {
+            g_state.writeStringFn("No such file!\n");
         }
     }
 
@@ -170,12 +172,16 @@ namespace CommandsImpl {
 
     void h(Range range, std:: string tail)
     {
-        g_state.writeStringFn(g_state.diagnostic);
-        g_state.writeStringFn("\n");
+        std::stringstream ss;
+        ss << g_state.diagnostic << std::endl;
+        g_state.writeStringFn(ss.str());
     }
 
     void Q(Range r, std::string tail)
     {
+#ifdef JAKED_TEST
+        throw application_exit();
+#endif
         exit(0);
     }
 
@@ -194,12 +200,17 @@ namespace CommandsImpl {
         std::advance(a, r.first - 1);
         std::advance(b, r.second);
         for(auto it = a; it != b; ++it) {
-            g_state.writeStringFn(*it);
-            g_state.writeStringFn("\n");
+            std::stringstream ss;
+            ss << *it << std::endl;
+            g_state.writeStringFn(ss.str());
         }
         g_state.line = std::distance(g_state.lines.begin(), b);
     }
 
+    void NOP(Range r, std::string)
+    {
+        /*NOP*/
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -210,6 +221,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
     { 'h', &CommandsImpl::h },
+    { '#', &CommandsImpl::NOP },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -367,17 +379,30 @@ void Loop()
                 int ii = 0;
                 while((ii = g_state.readCharFn()) != EOF) {
                     char c = (char)(ii & 0xFF);
+                    //printf("Read %x\n", c);
                     if(c == '\n') break;
                     ss << c;
                     if(ctrlc) return;
                 }
                 auto s = ss.str();
-
-                std::tie(r, command, tail) = ParseCommand(s);
                 if(ctrlc) break;
+
+                if( ii == EOF && s.empty()) {
+                    command = 'Q';
+                } else {
+                    std::tie(r, command, tail) = ParseCommand(s);
+                }
+                if(ctrlc) break;
+                //fprintf(stderr, "Will execute %c\n", command);
                 Commands.at(command)(r, tail);
                 g_state.diagnostic = "";
             } while(0);
+#ifdef JAKED_TEST
+        } catch(test_error& e) {
+            std::rethrow_exception(std::current_exception());
+        } catch(application_exit& e) {
+            std::rethrow_exception(std::current_exception());
+#endif
         } catch(std::exception& ex) {
             g_state.writeStringFn("?\n");
             g_state.diagnostic = ex.what();
