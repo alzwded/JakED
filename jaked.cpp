@@ -26,7 +26,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 volatile DWORD ctrlc = 0;
 struct {
-    std::string FILE;
+    std::string filename;
     int line;
     std::string PROMPT = "* ";
     std::list<std::string> lines;
@@ -87,10 +87,47 @@ private:
     {}
 };
 
+int SkipWS(std::string const& s, int i)
+{
+    while(s[i] == ' ' || s[i] == '\t') ++i;
+    return i;
+}
+
 namespace CommandsImpl {
-    void r(Range r, std::string tail)
+    void r(Range range, std::string tail)
     {
-        throw std::runtime_error("not implemented");
+        tail = tail.substr(SkipWS(tail, 0));
+        if(tail[0] == '!') {
+            throw std::runtime_error("shell execution is not implemented");
+        }
+        g_state.filename = tail;
+        FILE* f = fopen(tail.c_str(), "r");
+        if(f) {
+            auto after = g_state.lines.begin();
+            std::advance(after, range.first);
+            std::stringstream line;
+            int c;
+            while(!feof(f) && (c = fgetc(f)) != EOF) {
+                if(c == '\n') {
+                    after = g_state.lines.insert(after, line.str());
+                    ++after;
+                    line.str(std::string());
+                } else {
+                    line << (char)(c & 0xFF);
+                }
+            }
+            if(line.str() != "") {
+                g_state.lines.insert(after, line.str());
+                ++after;
+            }
+        }
+    }
+
+    void e(Range range, std::string tail)
+    {
+        g_state.lines.clear();
+        r(Range::S(0), tail);
+        if(g_state.lines.empty()) g_state.lines.emplace_back();
     }
 
     void q(Range r, std::string tail)
@@ -110,7 +147,7 @@ namespace CommandsImpl {
         auto a = g_state.lines.begin();
         auto b = g_state.lines.begin();
         std::advance(a, r.first - 1);
-        std::advance(b, r.second - 1);
+        std::advance(b, r.second);
         for(auto it = a; it != b; ++it) {
             printf("%s\n", it->c_str());
         }
@@ -118,14 +155,9 @@ namespace CommandsImpl {
 
 }
 
-int SkipWS(std::string const& s, int i)
-{
-    while(s[i] == ' ' || s[i] == '\t') ++i;
-    return i;
-}
-
 std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'p', &CommandsImpl::p },
+    { 'e', &CommandsImpl::e },
     { 'r', &CommandsImpl::r },
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
@@ -258,7 +290,7 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'p': case 'g': case 'G': case 'v': case 'V':
         case 'u': case 'P': case 'H': case 'h': case '#':
         case 'k': case 'i': case 'a': case 'c': case 'd':
-        case 'j': case 'm': case 't': case 'y':
+        case 'j': case 'm': case 't': case 'y': case '!':
         case 'x': case 'r': case 'l': case 'z': case '=':
         case 'W': case 'e': case 'E': case 'f': case 'w':
         case 'q': case 'Q':
@@ -279,9 +311,9 @@ void Loop()
             do {
                 std::stringstream ss;
                 if(ctrlc) return;
-                while(std::cin.good()) {
-                    char c;
-                    std::cin >> c;
+                int ii = 0;
+                while(!feof(stdin) && (ii = fgetc(stdin)) != EOF) {
+                    char c = (char)(ii & 0xFF);
                     if(c == '\n') break;
                     ss << c;
                     if(ctrlc) return;
@@ -321,7 +353,7 @@ int main(int argc, char* argv[])
     if(console) {
         DWORD mode;
         GetConsoleMode(console, &mode);
-        if(SetConsoleMode(console, mode|ENABLE_PROCESSED_INPUT)) {
+        if(SetConsoleMode(console, mode|ENABLE_PROCESSED_INPUT|ENABLE_LINE_INPUT)) {
             if(!SetConsoleCtrlHandler(consoleHandler, TRUE)) {
                 fprintf(stderr,"INTERNAL ERROR: Could not initialize windows control handler\nContinuing anyway.\nWARNING: CTRL-C will exit the application");
             }
@@ -336,9 +368,15 @@ int main(int argc, char* argv[])
         exit_usage("Too many arguments!", argv[0]);
     }
 
+#ifdef JAKED_DEBUG
+    if(std::string(argv[1]) == "-d") {
+        __debugbreak();
+    }
+#endif
+
     std::string file = argv[1];
     if(file.empty()) exit_usage("No such file!", argv[0]);
-    Commands.at('r')(Range::ZERO(), file);
+    Commands.at('e')(Range::ZERO(), file);
 
     Loop();
     return 0;
