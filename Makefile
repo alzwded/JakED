@@ -11,3 +11,6 @@ test: jaked_test.exe
 	jaked_test
 
 all: jaked.exe test
+
+clean:
+	del /q /s *.o *.obj *.exe *.pdb *.ilk
