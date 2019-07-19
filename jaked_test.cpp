@@ -77,11 +77,13 @@ struct ATEST {
 
 struct SUITE {
     static void NONE() {}
-    SUITE(std::function<void()> setup, std::list<std::function<bool()>> run, std::function<void()> teardown)
-        : m_setup(setup), m_run(run), m_teardown(teardown)
+    SUITE(std::function<void()> setup, std::list<std::function<bool()>> run, std::function<void()> teardown, DWORD timeout = 5 * 1000)
+        : m_setup(setup), m_run(run), m_teardown(teardown), m_timeout(timeout)
     {}
     std::function<void()> m_setup, m_teardown;
     std::list<std::function<bool()>> m_run;
+    DWORD m_timeout;
+    DWORD Timeout() { return (m_timeout > 0) ? m_timeout : 5 * 1000; }
     void SetUp() { m_setup(); }
     void TearDown() { m_teardown(); }
     bool Run() { 
@@ -91,6 +93,11 @@ struct SUITE {
         return failed;
     }
 };
+
+void OverrideTestSuccceeded() 
+{
+    exit(0);
+}
 
 std::string argv0;
 
@@ -135,6 +142,7 @@ std::map<std::string, SUITE*>& GetSuites()
 
 
 #define DEF_SUITE(X) do{\
+    DWORD Timeout = 5 * 1000; \
     std::string name = #X;\
     std::function<void()> setup(&SUITE::NONE), teardown(&SUITE::NONE);\
     std::list<std::function<bool()>> suiterun; \
@@ -152,10 +160,27 @@ std::map<std::string, SUITE*>& GetSuites()
     )
 
 #define END_SUITE() \
-        GetSuites()[name] = new SUITE(setup, suiterun, teardown);\
+        GetSuites()[name] = new SUITE(setup, suiterun, teardown, Timeout);\
     }while(0)
 
 void DEFINE_SUITES() {
+#if JAKED_TEST_SANITY_CHECK != 0
+    DEF_SUITE(00_testtimeout) {
+        Timeout = 1;
+        DEF_TEST(InternalSanityCheckThatMaxTimeWorks) {
+            TEST_RUN() {
+                while(1);
+            } TEST_RUN_END();
+        } END_TEST();
+    } END_SUITE();
+    DEF_SUITE(00_testcrash) {
+        DEF_TEST(StdTerminateCalledInSuite) {
+            TEST_RUN() {
+                std::terminate();
+            } TEST_RUN_END();
+        } END_TEST();
+    } END_SUITE();
+#endif
     DEF_SUITE(10_SkipWS) {
         DEF_TEST(SkipWS) {
             TEST_RUN() {
@@ -704,7 +729,9 @@ VOID CALLBACK killSelf(PVOID lpParam, BOOLEAN TimerOrWaitFired)
     if(TimerOrWaitFired) {
         fprintf(stderr, "Test suite max time hit\n");
         fflush(stderr);
-        std::terminate();
+        std::stringstream ss;
+        ss << "taskkill /t /f /pid " << GetCurrentProcessId();
+        system(ss.str().c_str());
     }
 }
 
@@ -713,9 +740,6 @@ int main(int argc, char* argv[])
     DEFINE_SUITES();
     argv0 = argv[0];
     if(argc == 1) {
-        HANDLE hTimer;
-        int allowedMaxTime = 5 * 1000;
-        CreateTimerQueueTimer(&hTimer, NULL, &killSelf, NULL, allowedMaxTime, 0, WT_EXECUTEONLYONCE);
         std::cout << "Running " << GetSuites().size() << " test suites" << std::endl;
         bool failed = false;
         std::list<std::string> failedSuites;
@@ -724,6 +748,10 @@ int main(int argc, char* argv[])
             std::stringstream ss;
             ss << argv0 << " " << kv.first;
             bool lfailed = system(ss.str().c_str());
+            // special case for internal sanity check
+            // 1. checks that infinite loops cause a test failure
+            // 2. checks that a test suite crashing in various ways doesn't impact other test suites
+            if(std::string(kv.first).find("00_") == 0) lfailed = !lfailed;
             if(lfailed) {
                 std::cout << "!!!!!!!!!!!NOK!!!!!!!!!!!!!" << std::endl;
                 failedSuites.push_back(kv.first);
@@ -743,6 +771,10 @@ int main(int argc, char* argv[])
 
     auto* suite = GetSuites()[argv[1]];
     if(suite) {
+        HANDLE hTimer;
+        int allowedMaxTime = suite->Timeout();
+        CreateTimerQueueTimer(&hTimer, NULL, &killSelf, NULL, allowedMaxTime, 0, WT_EXECUTEONLYONCE);
+
         std::cout << "Running " << argv[1] << std::endl;
         std::cout << "---------------------------------" << std::endl;
         suite->SetUp();
