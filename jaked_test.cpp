@@ -360,6 +360,16 @@ void DEFINE_SUITES() {
                 ASSERT(i == 6);
             } TEST_RUN_END();
         } END_TEST();
+        DEF_TEST(ParseSemicolon) {
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange(";pn", i);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == g_state.lines.size());
+                ASSERT(i == 1);
+            } TEST_RUN_END();
+        } END_TEST();
 
 
         SUITE_TEARDOWN() {

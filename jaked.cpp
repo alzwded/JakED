@@ -130,13 +130,13 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
     ++i;
     i = SkipWS(s, i);
     switch(s[i]) {
-        case ',': case '.': case '+': case '-': case '$':
+        case ',': case '.': case '+': case '-': case '$': case ';':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(temp, i) = ParseRange(s, i);
             return std::make_tuple(Range::R(base, temp.second), i);
         default:
-            return std::make_tuple(Range::R(base, g_state.lines.size()), i);
+            return std::make_tuple(Range::R(base, Range::Dollar()), i);
     }
 }
 
@@ -200,6 +200,8 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
     i = SkipWS(s, i);
     int left = 0;
     switch(s[i]) {
+        case ';':
+            return std::make_tuple(Range::R(Range::Dot(), Range::Dollar()), i + 1);
         case '$':
             return std::make_tuple(Range::S(Range::Dollar()), i + 1);
         case ',':
