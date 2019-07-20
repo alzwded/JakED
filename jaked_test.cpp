@@ -20,13 +20,17 @@ struct test_error : std::exception
 
 struct application_exit : std::exception
 {
-    application_exit() : std::exception("This should not be reported as an error") {}
+    bool m_error;
+    application_exit(bool error) : std::exception("This should not be reported as an error"), m_error(error) {}
+    bool ExitedWithError() const { return m_error; }
 };
 
 #define main jaked_main
 #include "jaked.cpp"
 #undef main
 #include <memory>
+
+#define _isatty(X) true
 
 #define ASSERT(X)\
     do{ bool well = (X); \

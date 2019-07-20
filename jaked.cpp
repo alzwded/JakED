@@ -24,6 +24,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define VC_EXTRALEAN
 #define NOMINMAX
 #include <windows.h>
+#include <io.h>
 
 int Interactive_readCharFn()
 {
@@ -47,6 +48,8 @@ struct {
     bool dirty = false;
     std::function<char()> readCharFn;
     std::function<void(std::string)> writeStringFn;
+    bool error = false;
+    bool Hmode = false;
 } g_state;
 
 struct Range
@@ -148,7 +151,8 @@ namespace CommandsImpl {
             }
             //printf("%zd %d", g_state.lines.size(), g_state.line);
         } else {
-            g_state.writeStringFn("No such file!\n");
+            //g_state.writeStringFn("No such file!\n");
+            throw std::runtime_error("No such file!");
         }
     }
 
@@ -173,6 +177,12 @@ namespace CommandsImpl {
         return E(range, tail);
     }
 
+    void H(Range range, std:: string tail)
+    {
+        g_state.Hmode = !g_state.Hmode;
+    }
+
+
     void h(Range range, std:: string tail)
     {
         std::stringstream ss;
@@ -183,9 +193,9 @@ namespace CommandsImpl {
     void Q(Range r, std::string tail)
     {
 #ifdef JAKED_TEST
-        throw application_exit();
+        throw application_exit(g_state.error);
 #endif
-        exit(0);
+        exit(g_state.error);
     }
 
     void q(Range range, std::string tail)
@@ -260,6 +270,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
     { 'h', &CommandsImpl::h },
+    { 'H', &CommandsImpl::H },
     { '#', &CommandsImpl::NOP },
     { 'k', &CommandsImpl::k },
     { '=', &CommandsImpl::EQUALS },
@@ -431,6 +442,19 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
     }
 }
 
+void ErrorOccurred(std::exception& ex)
+{
+    g_state.diagnostic = ex.what();
+    if(g_state.Hmode) {
+        std::stringstream ss;
+        ss << g_state.diagnostic << std::endl;
+        g_state.writeStringFn(ss.str());
+    } else {
+        g_state.writeStringFn("?\n");
+    }
+    if(!_isatty(_fileno(stdin))) CommandsImpl::Q(Range(), "");
+}
+
 void Loop()
 {
     while(1) {
@@ -469,11 +493,10 @@ void Loop()
             std::rethrow_exception(std::current_exception());
 #endif
         } catch(std::exception& ex) {
-            g_state.writeStringFn("?\n");
-            g_state.diagnostic = ex.what();
+            ErrorOccurred(ex);
         } catch(...) {
-            g_state.writeStringFn("?\n");
-            g_state.diagnostic = "???";
+            std::runtime_error ex("???");
+            ErrorOccurred(ex);
         }
 
         while(InterlockedCompareExchange(&ctrlc, 0, 1) != 0){};

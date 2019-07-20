@@ -85,5 +85,5 @@ Internals
 ---------
 
 + [ ] refactor string processing
-+ [ ] scripting behaviour (cancel on error if !isatty)
++ [x] scripting behaviour (cancel on error if !isatty)
 + [ ] test that e&q cowardly refuse to exit
