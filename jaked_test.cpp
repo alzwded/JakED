@@ -25,12 +25,21 @@ struct application_exit : std::exception
     bool ExitedWithError() const { return m_error; }
 };
 
+#include <cstdio>
+int TEST_isatty = 1;
+int override_isatty(int fd)
+{
+    //printf("mock isatty called\n");
+    return TEST_isatty;
+}
+
+#define ISATTY(X) override_isatty(X)
+
 #define main jaked_main
 #include "jaked.cpp"
 #undef main
 #include <memory>
 
-#define _isatty(X) true
 
 #define ASSERT(X)\
     do{ bool well = (X); \
@@ -601,6 +610,40 @@ void DEFINE_SUITES() {
                 ASSERT(tail == "5");
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(ParseEquals) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::tie(r, command, tail) = ParseCommand("=");
+                ASSERT(command == '=');
+                ASSERT(r.second == g_state.lines.size());
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(Parse_r) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::tie(r, command, tail) = ParseCommand("r some special thing");
+                ASSERT(command == 'r');
+                ASSERT(r.second == g_state.lines.size());
+            } TEST_RUN_END();
+        } END_TEST();
     } END_SUITE();
 
     DEF_SUITE(80_Integration) {
@@ -739,6 +782,9 @@ void DEFINE_SUITES() {
 
     DEF_SUITE(90_System) {
         SUITE_SETUP() {
+            // FIXME refactor this out
+            g_state.error = false;
+            g_state.Hmode = false;
             g_state.line = 1;
             g_state.lines.clear();
             for(size_t i = 0; i < 20; ++i) {
@@ -1084,6 +1130,208 @@ f test\tenlines.txt
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(IsAttyTrueBehaviourNoError) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    ++(*numLinesRead);
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                    ASSERT(!ex.ExitedWithError());
+                }
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
+        DEF_TEST(IsAttyTrueBehaviourOnError) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+'q
+=
+Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    ++(*numLinesRead);
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    case 2: ASSERT(s == "?\n"); break; // ?
+                    case 3: ASSERT(s == "2\n"); break; // 2
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                    ASSERT(ex.ExitedWithError());
+                }
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(IsAttyFalseBehaviourOnError) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                TEST_isatty = false;
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+'q
+=
+Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    ++(*numLinesRead);
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    case 2: ASSERT(s == "?\n"); break; // ?
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+                TEST_isatty = true;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                    ASSERT(ex.ExitedWithError());
+                }
+                ASSERT( (*numLinesRead) == 2);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(IsAttyFalseBehaviourNoError) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                TEST_isatty = false;
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+Q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    ++(*numLinesRead);
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+                TEST_isatty = true;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                    ASSERT(!ex.ExitedWithError());
+                }
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(HModeReportsSameErrorReportedBy_h) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+'q
+h
+H
+'q
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                auto line3 = std::make_shared<std::string>();
+                g_state.writeStringFn = [numLinesRead, line3](std::string const& s) {
+                    ++(*numLinesRead);
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    case 2: ASSERT(s == "?\n"); break; // ?
+                    case 3: ASSERT(s.size() && s != "?\n"); *line3 = s; break;
+                    case 4: ASSERT(s != "?\n"); ASSERT(s == *line3); break; // w/e error code there was
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT( (*numLinesRead) == 4);
+            } TEST_RUN_END();
+        } END_TEST();
 
     } END_SUITE();
 

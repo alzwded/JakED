@@ -26,6 +26,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <windows.h>
 #include <io.h>
 
+#ifndef ISATTY
+# define ISATTY(X) _isatty(X)
+#endif
+
 int Interactive_readCharFn()
 {
     if(feof(stdin)) return EOF;
@@ -192,6 +196,7 @@ namespace CommandsImpl {
 
     void Q(Range r, std::string tail)
     {
+        //printf("in Q %d\n", g_state.error);
 #ifdef JAKED_TEST
         throw application_exit(g_state.error);
 #endif
@@ -444,6 +449,7 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
 
 void ErrorOccurred(std::exception& ex)
 {
+    g_state.error = true;
     g_state.diagnostic = ex.what();
     if(g_state.Hmode) {
         std::stringstream ss;
@@ -452,7 +458,7 @@ void ErrorOccurred(std::exception& ex)
     } else {
         g_state.writeStringFn("?\n");
     }
-    if(!_isatty(_fileno(stdin))) CommandsImpl::Q(Range(), "");
+    if(!ISATTY(_fileno(stdin))) CommandsImpl::Q(Range(), "");
 }
 
 void Loop()
