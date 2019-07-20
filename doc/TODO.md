@@ -45,7 +45,7 @@ Misc
 + [ ] u
 + [ ] P
 + [ ] command line argument for P
-+ [ ] H
++ [x] H
 + [x] h
 + [x] .,.#
 
