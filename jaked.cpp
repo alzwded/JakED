@@ -112,6 +112,8 @@ namespace CommandsImpl {
     void r(Range range, std::string tail)
     {
         tail = tail.substr(SkipWS(tail, 0));
+        if(tail.empty()) tail = g_state.filename;
+        if(tail.empty()) throw std::runtime_error("No such file!");
         size_t bytes = 0;
         if(tail[0] == '!') {
             throw std::runtime_error("shell execution is not implemented");
@@ -119,7 +121,7 @@ namespace CommandsImpl {
         FILE* f = fopen(tail.c_str(), "r");
         if(f) {
             auto after = g_state.lines.begin();
-            std::advance(after, range.first);
+            std::advance(after, range.second);
             std::stringstream line;
             int c;
             while(!feof(f) && (c = fgetc(f)) != EOF) {
@@ -238,6 +240,14 @@ namespace CommandsImpl {
         if(i < tail.size()) tail = tail.substr(0, i);
         g_state.filename = tail;
     }
+
+    void EQUALS(Range r, std::string tail)
+    {
+        if(r.second < 1 || r.second > g_state.lines.size()) throw std::runtime_error("invalid range");
+        std::stringstream ss;
+        ss << r.second << std::endl;
+        g_state.writeStringFn(ss.str());
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -250,6 +260,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'h', &CommandsImpl::h },
     { '#', &CommandsImpl::NOP },
     { 'k', &CommandsImpl::k },
+    { '=', &CommandsImpl::EQUALS },
     { 'f', &CommandsImpl::f },
 };
 
@@ -386,16 +397,18 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
     bool whitespacing = true;
     i = SkipWS(s, i);
     switch(s[i]) {
-        case '\0':
+        case '\0': case 'z':
             r = Range::S(Range::Dot(1));
             break;
-        case 'p':
+        case '=': case 'w': case 'W': case 'v': case 'V':
+        case 'g': case 'G': case 'r': 
+            r = Range::R(1, Range::Dollar());
+            break;
+        default:
+        case '\'': case '/':
         case '+': case '-': case ',': case ';': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
-            std::tie(r, i) = ParseRange(s, i);
-            break;
-        case '\'':
             std::tie(r, i) = ParseRange(s, i);
             break;
     }

@@ -13,6 +13,7 @@ Navigation
 + [x] -
 + [x] ;
 + [x] 'r
++ [ ] ranges which are not explicitly numeric print the line number instead/as well
 
 Regex
 -----
@@ -35,7 +36,7 @@ Display
 + [ ] .,.pn
 + [ ] .,.n
 + [ ] zN
-+ [ ] =
++ [x] =
 + [x] <CR>
 
 Misc
@@ -43,6 +44,7 @@ Misc
 
 + [ ] u
 + [ ] P
++ [ ] command line argument for P
 + [ ] H
 + [x] h
 + [x] .,.#
@@ -71,5 +73,15 @@ I/O
 + [x] f FILE
 + [ ] .,.w
 + [ ] .,.W
++ [ ] f !sh
++ [ ] e !sh
++ [ ] w !sh
 + [x] q
 + [x] Q
+
+Internals
+---------
+
++ [ ] refactor string processing
++ [ ] scripting behaviour (cancel on error if !isatty)
++ [ ] test that e&q cowardly refuse to exit

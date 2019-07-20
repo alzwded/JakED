@@ -503,6 +503,16 @@ void DEFINE_SUITES() {
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(ParseASillyRangeButOnlyAssertOnSecond) {
+            TEST_RUN() {
+                Range r;
+                int i = 0; 
+                std::tie(r, i) = ParseRange("1, 2, 3, 4kq", i);
+                ASSERT(r.first); // this one I know is non-conformant, but this is a silly case anyway; it should be 3,4 but in my impl. it's 1,4
+                ASSERT(r.second == 4);
+                ASSERT(i == 10);
+            } TEST_RUN_END();
+        } END_TEST();
 
         SUITE_TEARDOWN() {
             g_state.lines.clear();
@@ -899,6 +909,177 @@ Q
                 ASSERT( (*numLinesRead) == 3);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(EqualsDefaultAndAddressed) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+=
+1kq
+'q=
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: ASSERT(s == "2\n"); (*numLinesRead)++; break;
+                    case 2: ASSERT(s == "1\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(EqualsDefaultDoesntAffectDot) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\tenlines.txt
+2
+=
+p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: ASSERT(s == "Line 2\n"); (*numLinesRead)++; break;
+                    case 2: ASSERT(s == "10\n"); (*numLinesRead)++; break;
+                    case 3: ASSERT(s == "Line 2\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(RAppendsAtTheEndByDefault) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\tenlines.txt
+r test\twolines.txt
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: (*numLinesRead)++; break;
+                    case 2: ASSERT(s == "Line 1\n"); (*numLinesRead)++; break;
+                    case 3: ASSERT(s == "Line 2\n"); (*numLinesRead)++; break;
+                    case 4: ASSERT(s == "Line 3\n"); (*numLinesRead)++; break;
+                    case 5: ASSERT(s == "Line 4\n"); (*numLinesRead)++; break;
+                    case 6: ASSERT(s == "Line 5\n"); (*numLinesRead)++; break;
+                    case 7: ASSERT(s == "Line 6\n"); (*numLinesRead)++; break;
+                    case 8: ASSERT(s == "Line 7\n"); (*numLinesRead)++; break;
+                    case 9: ASSERT(s == "Line 8\n"); (*numLinesRead)++; break;
+                    case 10: ASSERT(s == "Line 9\n"); (*numLinesRead)++; break;
+                    case 11: ASSERT(s == "Line 10\n"); (*numLinesRead)++; break;
+                    case 12: ASSERT(s == "This is line 1.\n"); (*numLinesRead)++; break;
+                    case 13: ASSERT(s == "This is line 2.\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(ERF0RCombo) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+r
+f test\tenlines.txt
+0r
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: (*numLinesRead)++; break;
+                    case 2: (*numLinesRead)++; break;
+                    case 3: ASSERT(s == "Line 1\n"); (*numLinesRead)++; break;
+                    case 4: ASSERT(s == "Line 2\n"); (*numLinesRead)++; break;
+                    case 5: ASSERT(s == "Line 3\n"); (*numLinesRead)++; break;
+                    case 6: ASSERT(s == "Line 4\n"); (*numLinesRead)++; break;
+                    case 7: ASSERT(s == "Line 5\n"); (*numLinesRead)++; break;
+                    case 8: ASSERT(s == "Line 6\n"); (*numLinesRead)++; break;
+                    case 9: ASSERT(s == "Line 7\n"); (*numLinesRead)++; break;
+                    case 10: ASSERT(s == "Line 8\n"); (*numLinesRead)++; break;
+                    case 11: ASSERT(s == "Line 9\n"); (*numLinesRead)++; break;
+                    case 12: ASSERT(s == "Line 10\n"); (*numLinesRead)++; break;
+                    case 13: ASSERT(s == "This is line 1.\n"); (*numLinesRead)++; break;
+                    case 14: ASSERT(s == "This is line 2.\n"); (*numLinesRead)++; break;
+                    case 15: ASSERT(s == "This is line 1.\n"); (*numLinesRead)++; break;
+                    case 16: ASSERT(s == "This is line 2.\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
 
     } END_SUITE();
 
