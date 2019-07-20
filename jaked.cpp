@@ -451,6 +451,7 @@ void ErrorOccurred(std::exception& ex)
 {
     g_state.error = true;
     g_state.diagnostic = ex.what();
+    //printf("%s\n", ex.what());
     if(g_state.Hmode) {
         std::stringstream ss;
         ss << g_state.diagnostic << std::endl;

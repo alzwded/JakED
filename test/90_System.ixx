@@ -393,7 +393,7 @@ Q
                 g_state.readCharFn = [state]() -> int {
                     // # starting to look cryptic
                     auto s = R"(E test\twolines.txt
-'q
+)" "\01" R"(
 =
 Q
 )";
@@ -435,7 +435,7 @@ Q
                 g_state.readCharFn = [state]() -> int {
                     // # starting to look cryptic
                     auto s = R"(E test\twolines.txt
-'q
+)" "\01" R"(
 =
 Q
 )";
@@ -515,10 +515,10 @@ Q
                 g_state.readCharFn = [state]() -> int {
                     // # starting to look cryptic
                     auto s = R"(E test\twolines.txt
-'q
+)" "\01" R"(
 h
 H
-'q
+)" "\01" R"(
 )";
                     if(*state >= strlen(s)) return EOF;
                     return s[(*state)++];
