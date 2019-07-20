@@ -234,6 +234,7 @@ namespace CommandsImpl {
             g_state.writeStringFn(ss.str());
             return;
         }
+        tail = tail.substr(SkipWS(tail, 0));
         if(tail[0] == '!') throw std::runtime_error("Writing to a shell command's STDIN is not implemented");
         size_t i = tail.size();
         while(tail[i - 1] == ' ') --i;
