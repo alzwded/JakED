@@ -1,7 +1,7 @@
 JAKED_TEST_SANITY_CHECK=0
 
 jaked.exe: jaked.cpp
-	cl /EHa /O2 jaked.cpp
+	cl /EHa /O2 /Ob1 /Ox /Ot jaked.cpp
 
 jaked_debug.exe: jaked.cpp
 	cl /EHa /Zi /DJAKED_DEBUG jaked.cpp /Fejaked_debug.exe

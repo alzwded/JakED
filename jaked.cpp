@@ -128,6 +128,7 @@ namespace CommandsImpl {
                 ++bytes;
                 if(c == '\n') {
                     after = g_state.lines.insert(after, line.str());
+                    //printf("> %s\n", line.str().c_str()); // FIXME some utf8 doesn't get right for some reason; might be utf16
                     ++after;
                     line.str(std::string());
                 } else {
