@@ -12,7 +12,7 @@ Navigation
 + [x] +
 + [x] -
 + [x] ;
-+ [ ] 'r
++ [x] 'r
 
 Regex
 -----
@@ -50,7 +50,7 @@ Misc
 Commands
 --------
 
-+ [ ] k
++ [x] k
 + [ ] Ni
 + [ ] Na
 + [ ] .,.c
@@ -68,7 +68,7 @@ I/O
 + [ ] r !sh
 + [x] e [F]
 + [x] E [F]
-+ [ ] f FILE
++ [x] f FILE
 + [ ] .,.w
 + [ ] .,.W
 + [x] q

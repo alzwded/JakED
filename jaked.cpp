@@ -211,6 +211,33 @@ namespace CommandsImpl {
     {
         /*NOP*/
     }
+
+    void k(Range r, std::string tail)
+    {
+        if(tail.empty()) throw std::runtime_error("missing argument");
+        if(tail[0] < 'a' || tail[0] > 'z') throw std::runtime_error("Invalid register. Registers must be a lowercase ASCII letter");
+        int idx = r.second;
+        if(idx < 1 || idx > g_state.lines.size())
+            throw std::runtime_error("Address out of bounds");
+        auto it = g_state.lines.begin();
+        std::advance(it, (idx - 1));
+        g_state.registers[tail[0]] = it;
+    }
+
+    void f(Range r, std::string tail)
+    {
+        if(tail.empty()) {
+            std::stringstream ss;
+            ss << g_state.filename << "\n";
+            g_state.writeStringFn(ss.str());
+            return;
+        }
+        if(tail[0] == '!') throw std::runtime_error("Writing to a shell command's STDIN is not implemented");
+        size_t i = tail.size();
+        while(tail[i - 1] == ' ') --i;
+        if(i < tail.size()) tail = tail.substr(0, i);
+        g_state.filename = tail;
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -222,6 +249,8 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'Q', &CommandsImpl::Q },
     { 'h', &CommandsImpl::h },
     { '#', &CommandsImpl::NOP },
+    { 'k', &CommandsImpl::k },
+    { 'f', &CommandsImpl::f },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -239,7 +268,7 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
     i = SkipWS(s, i);
     switch(s[i]) {
         case ',': case '.': case '+': case '-': case '$': case ';':
-        case '0': case '1': case '2': case '3': case '4':
+        case '0': case '1': case '2': case '3': case '4': case '\'':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(temp, i) = ParseRange(s, i);
             return std::make_tuple(Range::R(base, temp.second), i);
@@ -303,6 +332,23 @@ std::tuple<Range, int> ParseCommaOrOffset(int base, std::string const& s, int i)
 
 }
 
+std::tuple<Range, int> ParseRegister(std::string const& s, int i)
+{
+    i = SkipWS(s, i);
+    if(s[i] != '\'') throw std::runtime_error("Internal parsing error: unexpected '");
+    ++i;
+    if(s[i] < 'a' || s[i] > 'z') throw std::runtime_error("Syntax error: register reference expects a register. Registers may be lower-case ASCII characters");
+    char r = s[i];
+    ++i;
+    auto found = g_state.registers.find(r);
+    if(found == g_state.registers.end()) {
+        std::stringstream ss;
+        ss << "Register " << r << " is empty";
+        throw std::runtime_error(ss.str());
+    }
+    return ParseCommaOrOffset(std::distance(g_state.lines.begin(), found->second) + 1, s, i);
+}
+
 std::tuple<Range, int> ParseRange(std::string const& s, int i)
 {
     i = SkipWS(s, i);
@@ -323,6 +369,10 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
             std::tie(left, i) = ReadNumber(s, i);
             return ParseCommaOrOffset(left, s, i);
         }
+        case '+': case '-':
+            return ParseFromOffset(Range::Dot(), s, i);
+        case '\'':
+            return ParseRegister(s, i);
         default:
             return std::make_tuple(Range::S(Range::Dot()), i);
     }

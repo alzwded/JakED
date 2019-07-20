@@ -36,6 +36,11 @@ struct application_exit : std::exception
         } \
     }while(0)
 
+char FAIL_readCharFn() {
+    throw test_error("Should not have read anything");
+}
+
+void NULL_writeStringFn(std::string const&) {}
 
 struct ATEST {
     static void NONE() {}
@@ -424,6 +429,80 @@ void DEFINE_SUITES() {
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(ParseSinglePlus) {
+            TEST_SETUP() {
+                g_state.line = 3;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("+", i);
+                ASSERT(r.first == 4);
+                ASSERT(r.first == r.second);
+                ASSERT(i == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(ParseDoubleMinusAndDotPlusOne) {
+            TEST_SETUP() {
+                g_state.line = 3;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("--,.+1", i);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == 4);
+                ASSERT(i == 6);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(ParseRegister) {
+            TEST_SETUP() {
+                g_state.line = 3;
+                g_state.registers['q'] = g_state.lines.begin();
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+                g_state.registers.clear();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("'q", i);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == r.first);
+                ASSERT(i == 2);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(ParseTwoRegistersWithOffsetsEach) {
+            TEST_SETUP() {
+                g_state.line = 3;
+                g_state.registers['q'] = g_state.lines.begin();
+                g_state.registers['r'] = g_state.lines.begin();
+                std::advance(g_state.registers['r'], 3);
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+                g_state.registers.clear();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("'q++,'r-1pn", i);
+                ASSERT(r.first == 3);
+                ASSERT(r.second == 3);
+                ASSERT(i == 9);
+            } TEST_RUN_END();
+        } END_TEST();
+
 
         SUITE_TEARDOWN() {
             g_state.lines.clear();
@@ -522,6 +601,8 @@ void DEFINE_SUITES() {
             g_state.registers.clear();
             g_state.diagnostic = "";
             g_state.dirty = false;
+            g_state.readCharFn = FAIL_readCharFn;
+            g_state.writeStringFn = NULL_writeStringFn;
         } SUITE_SETUP_END();
         DEF_TEST(LoadFile) {
             auto numLinesRead = new int(0);
@@ -616,6 +697,30 @@ void DEFINE_SUITES() {
                 ASSERT( (*numLinesRead) == 0);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(SetAndRecallFilename) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "TestPassed\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('f')(Range(), "TestPassed");
+                Commands.at('f')(Range(), "");
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
     } END_SUITE();
 
     DEF_SUITE(90_System) {
@@ -630,6 +735,8 @@ void DEFINE_SUITES() {
             g_state.registers.clear();
             g_state.diagnostic = "";
             g_state.dirty = false;
+            g_state.readCharFn = FAIL_readCharFn;
+            g_state.writeStringFn = NULL_writeStringFn;
         } SUITE_SETUP_END();
         DEF_TEST(EditFileAndPrintAndExit) {
             auto numLinesRead = new int(0);
@@ -720,6 +827,79 @@ Q
                 ASSERT( (*numLinesRead) == 3);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(MarkedLineGetsRecalled) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(E test\twolines.txt
+1kq
+2
+'qp
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: ASSERT(s == "This is line 2.\n"); (*numLinesRead)++; break;
+                    case 2: ASSERT(s == "This is line 1.\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(MarkLineAfterCommaWithOffsetThenMarkLineFromRegisterWithOffsetThenPrint) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+1,.-1kq
+'qp
+1,'q+kx
+'xp
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    switch(*numLinesRead) {
+                    case 0: (*numLinesRead)++; break;
+                    case 1: ASSERT(s == "This is line 1.\n"); (*numLinesRead)++; break;
+                    case 2: ASSERT(s == "This is line 2.\n"); (*numLinesRead)++; break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
     } END_SUITE();
 
 }
