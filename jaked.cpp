@@ -19,6 +19,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <sstream>
 #include <functional>
 #include <cstdarg>
+#include <atomic>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -30,18 +31,17 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 # define ISATTY(X) _isatty(X)
 #endif
 
-int Interactive_readCharFn()
-{
-    if(feof(stdin)) return EOF;
-    return fgetc(stdin);
-}
+#define JAKED_DEBUG_CTRL_C
+#undef JAKED_DEBUG_CTRL_C
 
-void Interactive_writeStringFn(std::string const& s)
-{
-    printf("%s", s.c_str());
-}
+HANDLE TheConsoleStdin = NULL;
 
-volatile DWORD ctrlc = 0;
+// Note to self: if(ctrlc = ctrlc.load()) actually makes sure we end up seeing the value everywhere, otherwise it gets a random value in one of the threads
+// There are different memory models, e.g. acquire & release with some
+// strict rules thrown in there. I basically want a full memory barrier
+// around this flag (because it's easy and the only other thread ever
+// is the consoleHandler)
+std::atomic<bool> ctrlc = false;
 struct {
     std::string filename;
     int line;
@@ -55,6 +55,115 @@ struct {
     bool error = false;
     bool Hmode = false;
 } g_state;
+
+int Interactive_readCharFn()
+// WOW, this is a long story...
+{
+    static int lastWasD = 0;
+    static char lastChar = '\0';
+    if(lastWasD == 2) {
+        lastWasD = 0;
+        return lastChar;
+    }
+    // So, if there is no STDIN, just return EOF
+    if(feof(stdin)) {
+#ifdef JAKED_DEBUG_CTRL_C
+        fprintf(stderr, "stdin was closed somehow\n");
+#endif
+        return EOF;
+    }
+    // Next, if we're not connected to a terminal,
+    // use fgetc(stdin) like normal. Behaves in the
+    // expected way.
+    if(!ISATTY(fileno(stdin))) {
+        return fgetc(stdin);
+    }
+    // Aaaaand here it gets interesting.
+    char c = (char)0;
+    DWORD rv = 0;
+    do {
+        // Clear GetLastError() because as we know nobody
+        // ever does.
+        SetLastError(0);
+        // This and ReadFileA are those functions which
+        // actually get an ERROR_OPERATION_ABORTED error
+        // if they are interrupted (as defined for ^C and ^BRK)
+        auto success = ReadConsoleA(
+                TheConsoleStdin,
+                &c,
+                1,
+                &rv,
+                NULL);
+        //printf("rv %d c %d\n", rv, c);
+        // You can probably guess success == true and rv = 0,
+        // but w/e. If that happened...
+        if(GetLastError() == ERROR_OPERATION_ABORTED) {
+            lastWasD = 0;
+            // Clear GetLastError() because as we know nobody
+            // ever does.
+            SetLastError(0);
+            // And try to LOCK CMPXCHG to true since it is
+            // entirely unpredictable if the consoleHandler
+            // Thread or the main Thread get here first.
+            bool falsy = false;
+            //Sleep(1);
+            ctrlc.compare_exchange_strong(falsy, true);
+        }
+        // In the event that ReadConsoleA fails (I never saw it fail yet)
+        // then report some error and exit.
+        if(!success) {
+            fprintf(stderr, "ReadConsoleA failed with %d\n", GetLastError());
+            return EOF;
+        }
+
+        if(c == (char)10 && lastWasD == 1) {
+            lastWasD = 0;
+            return c;
+        }
+
+        if(lastWasD == 1 && c != (char)10) {
+            lastWasD = 2;
+            lastChar = c;
+            return (char)13;
+        }
+
+        // OF COURSE we're on windows and <CR> == [0xD, 0xA]
+        // Let's pretend we're always ignoring that character.
+        if(c == (char)13) {
+            lastWasD = true;
+            continue;
+        }
+
+#ifdef JAKED_DEBUG_CTRL_C
+        fprintf(stderr, "    read a %x\n", c);
+#endif
+        // Okay, if ctrlc is triggered, return some BS character.
+        // The caller will handle the flag.
+        if(ctrlc = ctrlc.load()) {
+#ifdef JAKED_DEBUG_CTRL_C
+            fprintf(stderr, "from ctrlc, returning NUL\n");
+#endif
+            return '\0';
+        }
+        // If STDIN got closed, return EOF.
+        if(feof(stdin)) {
+#ifdef JAKED_DEBUG_CTRL_C
+            fprintf(stderr, "lost stdin!!! my magic didn't work\n");
+#endif
+            return EOF;
+        }
+#ifdef JAKED_DEBUG_CTRL_C
+        fprintf(stderr, "read %c\n", c);
+#endif
+        // Finally, return the character
+        return c;
+    } while(1);
+}
+
+void Interactive_writeStringFn(std::string const& s)
+{
+    printf("%s", s.c_str());
+}
 
 struct Range
 {
@@ -465,31 +574,69 @@ void ErrorOccurred(std::exception& ex)
 void Loop()
 {
     while(1) {
+#ifdef JAKED_DEBUG_CTRL_C
+        fprintf(stderr, "resetting ctrlc\n");
+#endif
+        // If we're on an actual terminal, throw a line-feed
+        // in there to make it obvious the command got cancelled
+        // (especially in the case where the person was mid-sentence)
+        if(ctrlc && ISATTY(fileno(stdin))) {
+            FlushConsoleInputBuffer(TheConsoleStdin);
+            //printf("\n");
+        }
+        // Brutally set ctrlc to false since everything that needed
+        // to be handled was. In case someone was spamming ^C,
+        // w/e, that's a weird edge case I don't care about.
+        // A.K.A. I heard you the first time.
+        ctrlc = false;
+
         Range r;
         char command;
         std::string tail;
         try {
             do {
                 std::stringstream ss;
-                if(ctrlc) return;
                 int ii = 0;
                 while((ii = g_state.readCharFn()) != EOF) {
+#ifdef JAKED_DEBUG_CTRL_C
+                    fprintf(stderr, "ii%d\n", ii);
+#endif
                     char c = (char)(ii & 0xFF);
+                    // If we got interrupted, clear the line buffer
+                    if(ctrlc = ctrlc.load()) {
+#ifdef JAKED_DEBUG_CTRL_C
+                        fprintf(stderr, "qwe\n");
+#endif
+                        ss.str("");
+                        break;
+                    }
                     //printf("Read %x\n", c);
                     if(c == '\n') break;
                     ss << c;
-                    if(ctrlc) return;
                 }
+                // If we got interrupted, start a new loop
+                if(ctrlc = ctrlc.load()) break;
+#ifdef JAKED_DEBUG_CTRL_C
+                        printf("ftw\n");
+#endif
                 auto s = ss.str();
-                if(ctrlc) break;
 
                 if( ii == EOF && s.empty()) {
+#ifdef JAKED_DEBUG_CTRL_C
+                        fprintf(stderr, "s is empty\n");
+#endif
                     command = 'Q';
                 } else {
                     std::tie(r, command, tail) = ParseCommand(s);
+#ifdef JAKED_DEBUG_CTRL_C
+                        fprintf(stderr, "parsed command\n");
+#endif
                 }
-                if(ctrlc) break;
-                //fprintf(stderr, "Will execute %c\n", command);
+                // If we got interrupted, start a new loop
+                if(ctrlc = ctrlc.load()) break;
+#ifdef JAKED_DEBUG_CTRL_C
+                fprintf(stderr, "Will execute %c\n", command);
+#endif
                 Commands.at(command)(r, tail);
                 g_state.diagnostic = "";
             } while(0);
@@ -505,32 +652,33 @@ void Loop()
             std::runtime_error ex("???");
             ErrorOccurred(ex);
         }
-
-        while(InterlockedCompareExchange(&ctrlc, 0, 1) != 0){};
     }
 }
 
-BOOL WINAPI consoleHandler(DWORD signal)
+BOOL consoleHandler(DWORD signal)
 {
+    bool falsy = false;
     switch(signal) {
+        case CTRL_CLOSE_EVENT: printf("a\n");
+        case CTRL_BREAK_EVENT:
         case CTRL_C_EVENT:
-            while(InterlockedCompareExchange(&ctrlc, 1, 0) != 1){};
-        default:
+            // Use LOCK CMPXCHG because it's a race between
+            // whatever thread this is and the main thread.
+            // I don't know why, ask Windows...
+            //ctrlc.compare_exchange_strong(falsy, true);
             return TRUE;
+        default:
+            return FALSE;
     }
 }
 
 int main(int argc, char* argv[])
 {
-    HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
-    if(console) {
-        DWORD mode;
-        GetConsoleMode(console, &mode);
-        if(SetConsoleMode(console, mode|ENABLE_PROCESSED_INPUT|ENABLE_LINE_INPUT)) {
-            if(!SetConsoleCtrlHandler(consoleHandler, TRUE)) {
-                fprintf(stderr,"INTERNAL ERROR: Could not initialize windows control handler\nContinuing anyway.\nWARNING: CTRL-C will exit the application");
-            }
-        }
+    //TheConsoleStdin = CreateFileA("CONIN$", GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    TheConsoleStdin = GetStdHandle(STD_INPUT_HANDLE);
+
+    if(!SetConsoleCtrlHandler((PHANDLER_ROUTINE)&consoleHandler, TRUE)) {
+        fprintf(stderr,"INTERNAL ERROR: Could not initialize windows control handler\nContinuing anyway.\nWARNING: CTRL-C will exit the application");
     }
 
     if(argc == 1) {

@@ -79,7 +79,7 @@ I/O
 + [x] q
 + [x] Q
 + [ ] ^V literal input
-+ [ ] handle `CTRL_C` and `CTRL_BRK` elegantly
++ [x] handle `CTRL_C` and `CTRL_BRK` elegantly
 
 Internals
 ---------
