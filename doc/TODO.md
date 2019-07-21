@@ -6,11 +6,13 @@ Navigation
 
 + [x] N
 + [x] ,
++ [ ] % means ,
 + [x] $
 + [x] .
 + [x] offsets
 + [x] +
 + [x] -
++ [ ] ^ means -
 + [x] ;
 + [x] 'r
 + [ ] ranges which are not explicitly numeric print the line number instead/as well
@@ -23,10 +25,13 @@ Regex
 + [ ] //
 + [ ] ??
 + [ ] g//
++ [ ] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
 + [ ] G//
 + [ ] v//
 + [ ] V//
 + [ ] s//
++ [ ] s//g
++ [ ] s//N (replace only Nth match)
 + [ ] s
 
 Display
@@ -44,12 +49,12 @@ Misc
 
 + [ ] u
 + [ ] P
-+ [ ] command line argument for P
-+ [ ] other command line arguments
-+ [ ] start with empty file
 + [x] H
 + [x] h
 + [x] .,.#
++ [ ] ! (execute some command and output a '!')
++ [ ] !! (repeat last shell command)
++ [ ] % means default filename in shell commands
 
 Commands
 --------
@@ -100,10 +105,17 @@ I/O
 + [ ] e !sh
 + [ ] w !sh
 
-Internals
----------
+Internals, Externals and Other Tasks
+------------------------------------
 
 + [ ] refactor string processing
 + [x] scripting behaviour (cancel on error if !isatty)
 + [ ] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM
++ [ ] command line argument for P
++ [ ] arg: `-s` (suppress diagnostics)
++ [ ] start with empty file
++ [ ] jaked --help
++ [ ] jaked --version
++ [ ] some nice html documentation, like `ed`'s man page
++ [ ] read windows-native UTF16 files (`rutf16 somefile?`)
