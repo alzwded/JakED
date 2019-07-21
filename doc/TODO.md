@@ -66,7 +66,6 @@ Commands
 + [x] Ni
 + [x] test inserted text preserves registers correctly
 + [x] Na
-+ [x] .,.c
 + [x] test registers get clobbered by c
 
 *Line transfer, register update*:
@@ -79,6 +78,25 @@ Commands
 
 *Cut buffer, register update*:
 
++ [ ] cut buffer
++ [ ] swap file:
+  * I could implement the cut buffer to be IN the swap file
+  * Okay, quick format:
+  ```
+  <offset to cut buffer>
+  <append block 1>
+  <append block 2>
+  <stale cut buffer>
+  <append block 3>
+  <current cut buffer>
+  <append block 4>
+  ```
+  * [ ] On w/W, buffer is cleared and re-initialized with current cut buffer
+  * [ ] if no I/O can be performed in CWD, try %TEMP%, then %TMP%
+  * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
+  * [ ] on clean exit, delete file
+
++ [x] .,.c
 + [ ] .,.d
 + [ ] test registers get clobbered by d
 + [ ] .,.y

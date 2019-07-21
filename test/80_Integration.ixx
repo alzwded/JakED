@@ -245,6 +245,39 @@
                 ASSERT( (*numLinesRead) == 10);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(dLines) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "Line 1\n"); break;
+                    case 2: ASSERT(s == "Line 2\n"); break;
+                    case 3: ASSERT(s == "Line 3\n"); break;
+                    case 4: ASSERT(s == "Line 4\n"); break;
+                    case 5: ASSERT(s == "Line 7\n"); break;
+                    case 6: ASSERT(s == "Line 8\n"); break;
+                    case 7: ASSERT(s == "Line 9\n"); break;
+                    case 8: ASSERT(s == "Line 10\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('d')(Range::R(5, 6), "");
+                ASSERT(Range::Dot() == 5);
+                ASSERT(g_state.dirty);
+                Commands.at('p')(Range::R(1, Range::Dollar()), "");
+                ASSERT( (*numLinesRead) == 8);
+            } TEST_RUN_END();
+        } END_TEST();
         
         DEF_TEST(cLines) {
             auto numLinesRead = std::make_shared<int>(0);

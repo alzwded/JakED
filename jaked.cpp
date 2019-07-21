@@ -524,7 +524,7 @@ namespace CommandsImpl {
         return i(Range::S(r.second + 1), "");
     }
 
-    void c(Range r, std::string)
+    void d(Range r, std::string)
     {
         auto i1 = g_state.lines.begin(),
              i2 = g_state.lines.begin();
@@ -554,6 +554,13 @@ namespace CommandsImpl {
             }
         }
         g_state.lines.erase(i1, i2);
+        g_state.dirty = true;
+        g_state.line = r.first;
+    }
+
+    void c(Range r, std::string)
+    {
+        d(r, "");
         //printf("executing %da\n", r.first - 1);
         return a(Range::S(r.first - 1), "");
     }
@@ -581,6 +588,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'i', &CommandsImpl::i },
     { 'a', &CommandsImpl::a },
     { 'c', &CommandsImpl::c },
+    { 'd', &CommandsImpl::d },
 };
 
 void exit_usage(char* msg, char* argv0)

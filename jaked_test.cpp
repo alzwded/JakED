@@ -75,7 +75,8 @@ struct ATEST {
             failed = m_run();
         } catch(application_exit&) {
             failed = false;
-        } catch(test_error&) {
+        } catch(test_error& ex) {
+            std::cout << "    ....Caught " << ex.what() << std::endl;
             failed = true;
         } catch(std::exception& ex) {
             std::cout << "    ....Caught " << ex.what() << std::endl;
