@@ -60,6 +60,7 @@ struct {
     bool error = false;
     bool Hmode = false;
     int zWindow = 1;
+    bool showPrompt = false;
 } g_state;
 
 int Interactive_readCharFn()
@@ -318,6 +319,10 @@ namespace CommandsImpl {
         g_state.Hmode = !g_state.Hmode;
     }
 
+    void P(Range range, std:: string tail)
+    {
+        g_state.showPrompt = !g_state.showPrompt;
+    }
 
     void h(Range range, std:: string tail)
     {
@@ -356,6 +361,7 @@ namespace CommandsImpl {
             }
             ss << *it << std::endl;
             g_state.writeStringFn(ss.str());
+            if(ctrlc = ctrlc.load()) return;
         }
         g_state.line = std::distance(g_state.lines.begin(), b);
     }
@@ -373,6 +379,7 @@ namespace CommandsImpl {
             ss << first++ << '\t';
             ss << *it << std::endl;
             g_state.writeStringFn(ss.str());
+            if(ctrlc = ctrlc.load()) return;
         }
         g_state.line = std::distance(g_state.lines.begin(), b);
     }
@@ -533,6 +540,7 @@ namespace CommandsImpl {
         for(auto&& kv : g_state.registers) {
             //printf("checking r%c\n", kv.first);
             for(auto i = i1; i != i2; ++i) {
+                if(ctrlc = ctrlc.load()) return;
                 if(kv.second == i) {
                     //printf("marked r%c\n", kv.first);
                     toErase[kv.first - 'a'] = true;
@@ -554,6 +562,7 @@ namespace CommandsImpl {
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
+    { 'P', &CommandsImpl::P },
     { 'p', &CommandsImpl::p },
     { 'n', &CommandsImpl::n },
     { 'e', &CommandsImpl::e },
@@ -777,6 +786,10 @@ void Loop()
         // w/e, that's a weird edge case I don't care about.
         // A.K.A. I heard you the first time.
         ctrlc = false; /*rel*/
+        if(ISATTY(fileno(stdin)) && ISATTY(fileno(stdout)) && g_state.showPrompt) {
+            printf("%s", g_state.PROMPT.c_str());
+            fflush(stdout);
+        }
 
         Range r;
         char command;
