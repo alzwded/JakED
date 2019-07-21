@@ -272,8 +272,10 @@ namespace CommandsImpl {
                 g_state.writeStringFn(output.str());
             }
             // FIXME this is wrong
-            if(!g_state.lines.empty() && g_state.lines.front().find("\xEF" "\xBB" "\xBF") == 0) {
-                g_state.lines.front() = g_state.lines.front().substr(3);
+            auto firstLine = g_state.lines.begin();
+            std::advance(firstLine, range.second /* -1 + 1 */);
+            if(bytes > 0 && firstLine->find("\xEF" "\xBB" "\xBF") == 0) {
+                *firstLine = firstLine->substr(3);
             }
             //printf("%zd %d", g_state.lines.size(), g_state.line);
         } else {
