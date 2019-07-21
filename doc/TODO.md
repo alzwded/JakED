@@ -45,6 +45,8 @@ Misc
 + [ ] u
 + [ ] P
 + [ ] command line argument for P
++ [ ] other command line arguments
++ [ ] start with empty file
 + [x] H
 + [x] h
 + [x] .,.#
@@ -53,13 +55,22 @@ Commands
 --------
 
 + [x] k
+
+*Insert mode*:
+
 + [ ] Ni
 + [ ] Na
 + [ ] .,.c
-+ [ ] .,.d
+
+*Line transfer*:
+
 + [ ] j
 + [ ] .,.m.
 + [ ] .,.t.
+
+*Cut buffer*:
+
++ [ ] .,.d
 + [ ] .,.y
 + [ ] .x
 
@@ -67,19 +78,22 @@ I/O
 ---
 
 + [x] r [F]
-+ [ ] r !sh
 + [x] e [F]
 + [x] E [F]
 + [x] f FILE
 + [x] .,.w
 + [x] .,.W
-+ [ ] f !sh
-+ [ ] e !sh
-+ [ ] w !sh
 + [x] q
 + [x] Q
 + [ ] ^V literal input
 + [x] handle `CTRL_C` and `CTRL_BRK` elegantly
+
+*Shell versions*:
+
++ [ ] r !sh
++ [ ] f !sh
++ [ ] e !sh
++ [ ] w !sh
 
 Internals
 ---------
