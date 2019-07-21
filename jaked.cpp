@@ -515,7 +515,40 @@ namespace CommandsImpl {
 
     void a(Range r, std::string)
     {
-        i(Range::S(r.second + 1), "");
+        return i(Range::S(r.second + 1), "");
+    }
+
+    void c(Range r, std::string)
+    {
+        auto i1 = g_state.lines.begin(),
+             i2 = g_state.lines.begin();
+        std::advance(i1, r.first - 1);
+        std::advance(i2, r.second);
+        // clobber registers
+        bool toErase[26] = { false, false, false,
+            false, false, false, false, false,
+            false, false, false, false, false, false,
+            false, false, false, false, false, false,
+            false, false, false, false, false, false};
+        for(auto&& kv : g_state.registers) {
+            //printf("checking r%c\n", kv.first);
+            for(auto i = i1; i != i2; ++i) {
+                if(kv.second == i) {
+                    //printf("marked r%c\n", kv.first);
+                    toErase[kv.first - 'a'] = true;
+                    continue;
+                }
+            }
+        }
+        for(char c = 'a'; c != 'z'; ++c) {
+            if(toErase[c - 'a']) {
+                //printf("erasing r%c\n", c);
+                g_state.registers.erase(g_state.registers.find(c));
+            }
+        }
+        g_state.lines.erase(i1, i2);
+        //printf("executing %da\n", r.first - 1);
+        return a(Range::S(r.first - 1), "");
     }
 
 }
@@ -539,6 +572,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'z', &CommandsImpl::z },
     { 'i', &CommandsImpl::i },
     { 'a', &CommandsImpl::a },
+    { 'c', &CommandsImpl::c },
 };
 
 void exit_usage(char* msg, char* argv0)

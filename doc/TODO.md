@@ -61,8 +61,8 @@ Commands
 + [x] Ni
 + [x] test inserted text preserves registers correctly
 + [x] Na
-+ [ ] .,.c
-+ [ ] test registers get clobbered by c
++ [x] .,.c
++ [x] test registers get clobbered by c
 
 *Line transfer, register update*:
 

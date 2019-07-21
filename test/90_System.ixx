@@ -634,3 +634,48 @@ Some text
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(cClobbersRegisters) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(5kq
+6kw
+7ke
+5,6c
+Inserted Line 1
+Inserted Line 2
+.
+'e=
+'q=
+'w=
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "7\n"); break;
+                    case 2: ASSERT(s == "?\n"); break;
+                    case 3: ASSERT(s == "?\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(Range::Dot() == 6);
+                ASSERT(g_state.dirty);
+                ASSERT(*numLinesRead == 3);
+            } TEST_RUN_END();
+        } END_TEST();
