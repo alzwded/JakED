@@ -425,14 +425,20 @@ namespace CommandsImpl {
             if(g_state.filename.empty()) g_state.filename = fname;
         }
 
+        size_t nBytes = 0;
+
         auto i1 = g_state.lines.begin(), i2 = g_state.lines.begin();
         std::advance(i1, r.first - 1);
         std::advance(i2, r.second);
         for(; i1 != i2; ++i1) {
+            nBytes += i1->size() + strlen("\n");
             fprintf(f, "%s\n", i1->c_str());
         }
         fclose(f);
         g_state.dirty = false;
+        std::stringstream ss;
+        ss << nBytes << std::endl;
+        g_state.writeStringFn(ss.str());
     }
 
     void w(Range r, std::string tail)
