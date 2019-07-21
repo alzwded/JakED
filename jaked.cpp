@@ -354,6 +354,24 @@ namespace CommandsImpl {
         g_state.line = std::distance(g_state.lines.begin(), b);
     }
 
+    void n(Range r, std::string tail)
+    {
+        int first = std::max(1, r.first);
+        int second = std::max(1, r.second);
+        auto a = g_state.lines.begin();
+        auto b = g_state.lines.begin();
+        std::advance(a, first - 1);
+        std::advance(b, second);
+        for(auto it = a; it != b; ++it) {
+            std::stringstream ss;
+            ss << first++ << '\t';
+            ss << *it << std::endl;
+            g_state.writeStringFn(ss.str());
+        }
+        g_state.line = std::distance(g_state.lines.begin(), b);
+    }
+
+
     void NOP(Range r, std::string)
     {
         /*NOP*/
@@ -455,6 +473,7 @@ namespace CommandsImpl {
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'p', &CommandsImpl::p },
+    { 'n', &CommandsImpl::n },
     { 'e', &CommandsImpl::e },
     { 'E', &CommandsImpl::e },
     { 'r', &CommandsImpl::r },
