@@ -48,7 +48,7 @@ Misc
 ----
 
 + [ ] u
-+ [ ] P
++ [x] P
 + [x] H
 + [x] h
 + [x] .,.#
@@ -72,6 +72,7 @@ Commands
 *Line transfer, register update*:
 
 + [ ] j
++ [ ] jSEPARATOR join lines using SEPARATOR
 + [ ] .,.m.
 + [ ] move preserves registers
 + [ ] .,.t.
