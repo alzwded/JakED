@@ -62,13 +62,13 @@ Commands
 + [ ] Na
 + [ ] .,.c
 
-*Line transfer*:
+*Line transfer, register update*:
 
 + [ ] j
 + [ ] .,.m.
 + [ ] .,.t.
 
-*Cut buffer*:
+*Cut buffer, register update*:
 
 + [ ] .,.d
 + [ ] .,.y

@@ -481,13 +481,45 @@ namespace CommandsImpl {
         }
         p(Range::R(r.second, r.second + g_state.zWindow - 1), "");
     }
+
+    void i(Range r, std::string)
+    {
+        auto before = g_state.lines.begin();
+        std::advance(before, std::max(1, r.second) - 1);
+        std::list<std::string> lines;
+        std::stringstream ss;
+        while(1) {
+            char c = g_state.readCharFn();
+            //printf("read a %x %c\n", c, c);
+            //printf("ss = %s\n", ss.str().c_str());
+            if(ctrlc = ctrlc.load()) return;
+            if(c == '\n') {
+                if(ss.str() == ".") {
+                    //printf("broke at .\n");
+                    break;
+                }
+                //printf("pushing line\n");
+                lines.push_back(ss.str());
+                ss.str("");
+                continue;
+            }
+            //printf("pushing char\n");
+            ss << c;
+        }
+        g_state.lines.insert(before, lines.begin(), lines.end());
+        if(lines.size()) {
+            g_state.dirty = true;
+            g_state.line = r.second + lines.size() - 1;
+        }
+    }
+
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'p', &CommandsImpl::p },
     { 'n', &CommandsImpl::n },
     { 'e', &CommandsImpl::e },
-    { 'E', &CommandsImpl::e },
+    { 'E', &CommandsImpl::E },
     { 'r', &CommandsImpl::r },
     { 'q', &CommandsImpl::q },
     { 'Q', &CommandsImpl::Q },
@@ -500,6 +532,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'w', &CommandsImpl::w },
     { 'W', &CommandsImpl::W },
     { 'z', &CommandsImpl::z },
+    { 'i', &CommandsImpl::i },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -662,7 +695,7 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'j': case 'm': case 't': case 'y': case '!':
         case 'x': case 'r': case 'l': case 'z': case '=':
         case 'W': case 'e': case 'E': case 'f': case 'w':
-        case 'q': case 'Q':
+        case 'q': case 'Q': case 'n':
         case '\n':
             //return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
             return std::make_tuple(r, s[i], s.substr(i + 1));

@@ -64,6 +64,24 @@
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(ParseComma_n) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::tie(r, command, tail) = ParseCommand(",n");
+                ASSERT(r.first == 1);
+                ASSERT(r.second == g_state.lines.size());
+                ASSERT(command == 'n');
+            } TEST_RUN_END();
+        } END_TEST();
+
         DEF_TEST(Parse_n_comma_n_m_n) {
             TEST_RUN() {
                 Range r;
