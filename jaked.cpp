@@ -272,7 +272,7 @@ namespace CommandsImpl {
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
-            // FIXME this is wrong
+            // clear UTF8 BOM if it was there
             auto firstLine = g_state.lines.begin();
             std::advance(firstLine, range.second /* -1 + 1 */);
             if(bytes > 0 && firstLine->find("\xEF" "\xBB" "\xBF") == 0) {
@@ -280,7 +280,6 @@ namespace CommandsImpl {
             }
             //printf("%zd %d", g_state.lines.size(), g_state.line);
         } else {
-            //g_state.writeStringFn("No such file!\n");
             throw std::runtime_error("No such file!");
         }
     }
