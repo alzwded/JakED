@@ -101,3 +101,4 @@ Internals
 + [ ] refactor string processing
 + [x] scripting behaviour (cancel on error if !isatty)
 + [ ] test that e&q cowardly refuse to exit
++ [x] utf8 with BOM

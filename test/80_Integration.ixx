@@ -48,6 +48,35 @@
                 ASSERT( (*numLinesRead) == 1);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(LoadFileUTF8Bom) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                printf("%s\n", s.c_str());
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "17\n"); break; // byte count
+                    case 2: ASSERT(s == "Line 1\n"); break;
+                    case 3: ASSERT(s == "Line 2\n"); break;
+                    default:
+                        fprintf(stderr, "Unexpected string %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('E')(Range(), "test\\utf8bom.txt");
+                Commands.at('p')(Range::R(1, 2), "");
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
         DEF_TEST(EditFileAndPrint) {
             auto numLinesRead = new int(0);
             TEST_SET_EXTRA(numLinesRead);

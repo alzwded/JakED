@@ -271,6 +271,9 @@ namespace CommandsImpl {
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
+            if(!g_state.lines.empty() && g_state.lines.front().find("\xEF" "\xBB" "\xBF") == 0) {
+                g_state.lines.front() = g_state.lines.front().substr(3);
+            }
             //printf("%zd %d", g_state.lines.size(), g_state.line);
         } else {
             //g_state.writeStringFn("No such file!\n");
