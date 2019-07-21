@@ -291,3 +291,49 @@ Inserted Line 2
                 ASSERT( (*numLinesRead) == 12);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(AppendSomeLine) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(Inserted Line 1
+Inserted Line 2
+.
+)";
+                    ASSERT(*state < stuff.size());
+                    return stuff[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "Inserted Line 1\n"); break;
+                    case 2: ASSERT(s == "Inserted Line 2\n"); break;
+                    case 3: ASSERT(s == "Line 1\n"); break;
+                    case 4: ASSERT(s == "Line 2\n"); break;
+                    case 5: ASSERT(s == "Line 3\n"); break;
+                    case 6: ASSERT(s == "Line 4\n"); break;
+                    case 7: ASSERT(s == "Line 5\n"); break;
+                    case 8: ASSERT(s == "Line 6\n"); break;
+                    case 9: ASSERT(s == "Line 7\n"); break;
+                    case 10: ASSERT(s == "Line 8\n"); break;
+                    case 11: ASSERT(s == "Line 9\n"); break;
+                    case 12: ASSERT(s == "Line 10\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('a')(Range::S(0), "");
+                ASSERT(Range::Dot() == 2);
+                ASSERT(g_state.dirty);
+                Commands.at('p')(Range::R(1, Range::Dollar()), "");
+                ASSERT( (*numLinesRead) == 12);
+            } TEST_RUN_END();
+        } END_TEST();

@@ -513,6 +513,11 @@ namespace CommandsImpl {
         }
     }
 
+    void a(Range r, std::string)
+    {
+        i(Range::S(r.second + 1), "");
+    }
+
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -533,6 +538,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'W', &CommandsImpl::W },
     { 'z', &CommandsImpl::z },
     { 'i', &CommandsImpl::i },
+    { 'a', &CommandsImpl::a },
 };
 
 void exit_usage(char* msg, char* argv0)

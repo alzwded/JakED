@@ -597,3 +597,40 @@ z
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(InsertPreservesRegisters) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\tenlines.txt
+5kq
+5i
+Some text
+.
+'qn
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    case 2: ASSERT(s == "6\tLine 5\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 11);
+            } TEST_RUN_END();
+        } END_TEST();
+

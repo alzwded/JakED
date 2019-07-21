@@ -58,21 +58,26 @@ Commands
 
 *Insert mode*:
 
-+ [ ] Ni
-+ [ ] Na
++ [x] Ni
++ [x] test inserted text preserves registers correctly
++ [x] Na
 + [ ] .,.c
++ [ ] test registers get clobbered by c
 
 *Line transfer, register update*:
 
 + [ ] j
 + [ ] .,.m.
++ [ ] move preserves registers
 + [ ] .,.t.
 
 *Cut buffer, register update*:
 
 + [ ] .,.d
++ [ ] test registers get clobbered by d
 + [ ] .,.y
 + [ ] .x
++ [ ] test x preserves registers like i
 
 I/O
 ---
