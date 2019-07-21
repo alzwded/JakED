@@ -41,6 +41,11 @@ HANDLE TheConsoleStdin = NULL;
 // strict rules thrown in there. I basically want a full memory barrier
 // around this flag (because it's easy and the only other thread ever
 // is the consoleHandler)
+// If one just if(ctrlc), the memory gets acquired, but since there's
+// no explicit release, our thread is left with that value, which should
+// have been updated by the other thread. Assigning it back is a straight
+// forward way to release it, despite shennanigans going on in the CPU
+// cache line or w/e
 std::atomic<bool> ctrlc = false;
 struct {
     std::string filename;
@@ -642,15 +647,15 @@ void Loop()
         // If we're on an actual terminal, throw a line-feed
         // in there to make it obvious the command got cancelled
         // (especially in the case where the person was mid-sentence)
-        if(ctrlc && ISATTY(fileno(stdin))) {
+        if(ctrlc/*acq*/ && ISATTY(fileno(stdin))) {
             FlushConsoleInputBuffer(TheConsoleStdin);
-            //printf("\n");
+            printf("\n");
         }
         // Brutally set ctrlc to false since everything that needed
         // to be handled was. In case someone was spamming ^C,
         // w/e, that's a weird edge case I don't care about.
         // A.K.A. I heard you the first time.
-        ctrlc = false;
+        ctrlc = false; /*rel*/
 
         Range r;
         char command;
