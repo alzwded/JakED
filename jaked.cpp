@@ -271,6 +271,7 @@ namespace CommandsImpl {
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
+            // FIXME this is wrong
             if(!g_state.lines.empty() && g_state.lines.front().find("\xEF" "\xBB" "\xBF") == 0) {
                 g_state.lines.front() = g_state.lines.front().substr(3);
             }
