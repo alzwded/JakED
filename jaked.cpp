@@ -59,6 +59,7 @@ struct {
     std::function<void(std::string)> writeStringFn;
     bool error = false;
     bool Hmode = false;
+    int zWindow = 1;
 } g_state;
 
 int Interactive_readCharFn()
@@ -228,6 +229,8 @@ int SkipWS(std::string const& s, int i)
     while(s[i] == ' ' || s[i] == '\t') ++i;
     return i;
 }
+
+std::tuple<int, int> ReadNumber(std::string const&, int);
 
 namespace CommandsImpl {
     void r(Range range, std::string tail)
@@ -435,6 +438,19 @@ namespace CommandsImpl {
         commonW(r, tail, "a");
         if(doQuit) q(r, "");
     }
+
+    void z(Range r, std::string tail)
+    {
+        tail = tail.substr(SkipWS(tail, 0));
+        if(!tail.empty()) {
+            int newWindowSize = 0;
+            int i = 0;
+            std::tie(newWindowSize, i) = ReadNumber(tail, 0);
+            if(i == 0 || newWindowSize <= 0) throw std::runtime_error("Parse error: invalid window size");
+            g_state.zWindow = newWindowSize;
+        }
+        p(Range::R(r.second, r.second + g_state.zWindow - 1), "");
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -452,6 +468,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'f', &CommandsImpl::f },
     { 'w', &CommandsImpl::w },
     { 'W', &CommandsImpl::W },
+    { 'z', &CommandsImpl::z },
 };
 
 void exit_usage(char* msg, char* argv0)

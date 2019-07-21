@@ -35,7 +35,7 @@ Display
 + [x] .,.p
 + [x] .,.pn
 + [ ] .,.n
-+ [ ] zN
++ [x] zN
 + [x] =
 + [x] <CR>
 

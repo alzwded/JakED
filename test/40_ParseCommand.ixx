@@ -110,3 +110,21 @@
                 ASSERT(r.second == g_state.lines.size());
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(Parse_z) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::tie(r, command, tail) = ParseCommand("z3");
+                ASSERT(command == 'z');
+                ASSERT(r.second == Range::Dot(1));
+                ASSERT(tail == "3");
+            } TEST_RUN_END();
+        } END_TEST();
