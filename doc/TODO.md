@@ -92,7 +92,7 @@ Commands
   <append block 4>
   ```
   * [ ] On w/W, buffer is cleared and re-initialized with current cut buffer
-  * [ ] if no I/O can be performed in CWD, try %TEMP%, then %TMP%
+  * [ ] ~~if no I/O can be performed in CWD~~, try %TEMP%, then %TMP%
   * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [ ] on clean exit, delete file
 
