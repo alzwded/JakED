@@ -1,0 +1,4 @@
+E test\twolines.txt
+w test.tmp
+E test\tenlines.txt
+1,5W test.tmp

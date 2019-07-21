@@ -83,6 +83,32 @@
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(EditFileAndPrintWithNumbers) {
+            auto numLinesRead = new int(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: break; case 2: ASSERT(s == "4\tLine 4\n"); break;
+                    case 3: ASSERT(s == "5\tLine 5\n"); break;
+                    default:
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                delete numLinesRead;
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('E')(Range(), "test\\tenlines.txt");
+                Commands.at('p')(Range::R(4, 5), "n test\\tenlines.txt");
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
         DEF_TEST(CommentDoesNothing) {
             auto numLinesRead = new int(0);
             TEST_SET_EXTRA(numLinesRead);

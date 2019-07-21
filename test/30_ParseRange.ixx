@@ -71,9 +71,9 @@
             TEST_RUN() {
                 Range r;
                 int i = 0;
-                std::tie(r, i) = ParseRange(".++,", i);
-                ASSERT(r.first == 5 + 2);
-                ASSERT(r.second == g_state.lines.size());
+                std::tie(r, i) = ParseRange(".--,", i);
+                ASSERT(r.first == 5 - 2);
+                ASSERT(r.second == 5);
                 ASSERT(i == 4);
             } TEST_RUN_END();
         } END_TEST();
@@ -137,7 +137,7 @@
                 int i = 0;
                 std::tie(r, i) = ParseRange(".,", i);
                 ASSERT(r.first == 2);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == 2);
                 ASSERT(i == 2);
             } TEST_RUN_END();
         } END_TEST();

@@ -41,7 +41,7 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand("f something");
                 ASSERT(command == 'f');
-                ASSERT(tail == "something");
+                ASSERT(tail == " something");
             } TEST_RUN_END();
         } END_TEST();
 

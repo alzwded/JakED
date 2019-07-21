@@ -255,6 +255,7 @@ namespace CommandsImpl {
                 g_state.lines.insert(after, line.str());
                 ++after;
             }
+            fclose(f);
             g_state.dirty = true;
             g_state.line = (int)std::distance(g_state.lines.begin(), after);
             {
@@ -269,9 +270,17 @@ namespace CommandsImpl {
         }
     }
 
-    void E(Range range, std::string tail)
+    std::string getFileName(std::string tail)
     {
         tail = tail.substr(SkipWS(tail, 0));
+        if(tail.empty()) tail = g_state.filename;
+        if(tail.empty()) throw std::runtime_error("No such file!");
+        return tail;
+    }
+
+    void E(Range range, std::string tail)
+    {
+        tail = getFileName(tail);
         if(tail[0] == '!') {
             throw std::runtime_error("shell execution is not implemented");
         } else {
@@ -318,16 +327,19 @@ namespace CommandsImpl {
         return Q(range, tail);
     }
 
-    void p(Range r, std::string)
+    void p(Range r, std::string tail)
     {
-        int first = std::min(1, r.first);
-        int second = std::min(1, r.second);
+        int first = std::max(1, r.first);
+        int second = std::max(1, r.second);
         auto a = g_state.lines.begin();
         auto b = g_state.lines.begin();
-        std::advance(a, r.first - 1);
-        std::advance(b, r.second);
+        std::advance(a, first - 1);
+        std::advance(b, second);
         for(auto it = a; it != b; ++it) {
             std::stringstream ss;
+            if(tail[0] == 'n') {
+                ss << first++ << '\t';
+            }
             ss << *it << std::endl;
             g_state.writeStringFn(ss.str());
         }
@@ -353,13 +365,13 @@ namespace CommandsImpl {
 
     void f(Range r, std::string tail)
     {
+        tail = tail.substr(SkipWS(tail, 0));
         if(tail.empty()) {
             std::stringstream ss;
             ss << g_state.filename << "\n";
             g_state.writeStringFn(ss.str());
             return;
         }
-        tail = tail.substr(SkipWS(tail, 0));
         if(tail[0] == '!') throw std::runtime_error("Writing to a shell command's STDIN is not implemented");
         size_t i = tail.size();
         while(tail[i - 1] == ' ') --i;
@@ -373,6 +385,50 @@ namespace CommandsImpl {
         std::stringstream ss;
         ss << r.second << std::endl;
         g_state.writeStringFn(ss.str());
+    }
+
+    void commonW(Range r, std::string fname, const char* mode)
+    {
+        if(r.first < 1 || r.second < 1 || r.first > g_state.lines.size() || r.second > g_state.lines.size()) throw std::runtime_error("Invalid range");
+        fname = getFileName(fname);
+        FILE* f;
+        if(fname[0] == '!') throw new std::runtime_error("Writing to pipe not implemented");
+        else {
+            f = fopen(fname.c_str(), mode);
+            if(!f) throw std::runtime_error("Cannot open file for writing");
+            if(g_state.filename.empty()) g_state.filename = fname;
+        }
+
+        auto i1 = g_state.lines.begin(), i2 = g_state.lines.begin();
+        std::advance(i1, r.first - 1);
+        std::advance(i2, r.second);
+        for(; i1 != i2; ++i1) {
+            fprintf(f, "%s\n", i1->c_str());
+        }
+        fclose(f);
+        g_state.dirty = false;
+    }
+
+    void w(Range r, std::string tail)
+    {
+        bool doQuit = false;
+        if(tail[0] == 'q') {
+            doQuit = true;
+            tail = tail.substr(SkipWS(tail, 1));
+        }
+        commonW(r, tail, "w");
+        if(doQuit) q(r, "");
+    }
+
+    void W(Range r, std::string tail)
+    {
+        bool doQuit = false;
+        if(tail[0] == 'q') {
+            doQuit = true;
+            tail = tail.substr(SkipWS(tail, 1));
+        }
+        commonW(r, tail, "a");
+        if(doQuit) q(r, "");
     }
 }
 
@@ -389,6 +445,8 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'k', &CommandsImpl::k },
     { '=', &CommandsImpl::EQUALS },
     { 'f', &CommandsImpl::f },
+    { 'w', &CommandsImpl::w },
+    { 'W', &CommandsImpl::W },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -399,7 +457,7 @@ void exit_usage(char* msg, char* argv0)
 }
 
 std::tuple<Range, int> ParseRange(std::string const&, int i);
-std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
+std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i, bool wholeFileCandidate = false)
 {
     Range temp;
     ++i;
@@ -411,7 +469,10 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i)
             std::tie(temp, i) = ParseRange(s, i);
             return std::make_tuple(Range::R(base, temp.second), i);
         default:
-            return std::make_tuple(Range::R(base, Range::Dollar()), i);
+            if(wholeFileCandidate)
+                return std::make_tuple(Range::R(base, Range::Dollar()), i);
+            else
+                return std::make_tuple(Range::R(base, Range::Dot()), i);
     }
 }
 
@@ -497,7 +558,7 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
         case '$':
             return std::make_tuple(Range::S(Range::Dollar()), i + 1);
         case ',':
-            return ParseFromComma(1, s, i);
+            return ParseFromComma(1, s, i, true);
         case '.':
             ++i;
             return ParseCommaOrOffset(Range::Dot(), s, i);
@@ -550,7 +611,8 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'W': case 'e': case 'E': case 'f': case 'w':
         case 'q': case 'Q':
         case '\n':
-            return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
+            //return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
+            return std::make_tuple(r, s[i], s.substr(i + 1));
         default:
             throw std::runtime_error("Syntax error");
     }
