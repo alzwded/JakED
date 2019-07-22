@@ -115,8 +115,6 @@ easier to draw, and conceptually it kind-of works that way. Oh, and at the
 time of writing, the CommandProcessor is basically the code inside the
 Loop() function, so that needs to be refactored.
 
-This thing should be tested externally with the real swap file.
-
 Stuff like the cut buffer should be tested with the in-memory implementation,
 more to check that the command invoke the correct calls than anything else.
 
@@ -124,3 +122,16 @@ Some other rafactoring that needs to be done:
 
 - don't create a giant string of `TEXT` or `OTXT` or the whole UNDO stack, rather process them as lines or in blocks. This applies to both a, cut, undo and getUndo
 - the cut buffer may be re-used by the undo command (i.e. the cut buffer points *into* the undo buffer).
+
+Testability
+-----------
+
+This thing should be tested externally with the real swap file. I.e. in the [last stage](../test/testWriteCommands.cmd)
+
+Reasons:
+
++ it records & plays back existing commands (which should be well tested by the lower levels)
++ it interacts with the Swapfile, which is a deployment thing
++ it is something "you see", i.e. we'd be testing mostly glue code
+
+It would be best if there were a separate test suite for `Swapfile/FileImpl`

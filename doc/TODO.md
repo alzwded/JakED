@@ -47,7 +47,7 @@ Display
 Misc
 ----
 
-+ [ ] u, see [UndoAndSwapFile.md]
++ [ ] u, see [design document](UndoAndSwapFile.md)
 + [x] P
 + [x] H
 + [x] h
@@ -79,7 +79,7 @@ Commands
 *Cut buffer, register update*:
 
 + [ ] cut buffer
-+ [ ] swap file: see [UndoAndSwapFile.md]
++ [ ] swap file: see [design document](UndoAndSwapFile.md)
   * [ ] On w/W, buffer is cleared and re-initialized with current cut buffer
   * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [ ] on clean exit, delete file
