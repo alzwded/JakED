@@ -47,14 +47,14 @@ Display
 Misc
 ----
 
-+ [ ] u
++ [ ] u, see [UndoAndSwapFile.md]
 + [x] P
 + [x] H
 + [x] h
 + [x] .,.#
 + [ ] ! (execute some command and output a '!')
 + [ ] !! (repeat last shell command)
-+ [ ] % means default filename in shell commands
++ [ ] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
 
 Commands
 --------
@@ -71,7 +71,7 @@ Commands
 *Line transfer, register update*:
 
 + [ ] j
-+ [ ] jSEPARATOR join lines using SEPARATOR
++ [ ] jSEPARATOR join lines using SEPARATOR (extension)
 + [ ] .,.m.
 + [ ] move preserves registers
 + [ ] .,.t.
@@ -79,26 +79,14 @@ Commands
 *Cut buffer, register update*:
 
 + [ ] cut buffer
-+ [ ] swap file:
-  * I could implement the cut buffer to be IN the swap file
-  * Okay, quick format:
-  ```
-  <offset to cut buffer>
-  <append block 1>
-  <append block 2>
-  <stale cut buffer>
-  <append block 3>
-  <current cut buffer>
-  <append block 4>
-  ```
++ [ ] swap file: see [UndoAndSwapFile.md]
   * [ ] On w/W, buffer is cleared and re-initialized with current cut buffer
-  * [ ] ~~if no I/O can be performed in CWD~~, try %TEMP%, then %TMP%
   * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [ ] on clean exit, delete file
 
 + [x] .,.c
-+ [ ] .,.d
-+ [ ] test registers get clobbered by d
++ [x] .,.d
++ [x] test registers get clobbered by d
 + [ ] .,.y
 + [ ] .x
 + [ ] test x preserves registers like i
