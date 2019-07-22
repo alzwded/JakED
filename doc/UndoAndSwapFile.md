@@ -21,7 +21,7 @@ Undo behaviour per command
 Notations:
 
 | Notation      | Notes                                           |
-+---------------+-------------------------------------------------+
+|---------------|-------------------------------------------------|
 | `N`           | Range=N                                         |
 | `N,M`         | Range=N,M                                       |
 | `N,MmP`       | Range=N,M, destination=P                        |
@@ -30,7 +30,7 @@ Notations:
 | `OTXT`        | Deleted text (e.g. for `d`, `c`...)             |
 
 | Command       | Undo instructions                               |
-+---------------+-------------------------------------------------+
+|---------------|-------------------------------------------------|
 | `Ni`          | `N-1,N-1+LTXTd`                                 |
 | `Na`          | `N,N+LTXTd`                                     |
 | `N,McTEXT`    | `N,N+LTXTcOTXT`                                 |
@@ -39,8 +39,7 @@ Notations:
 | `Nx`          | `N,N+LTXTd`                                     |
 | `Nr`          | `N+1,N+1LTXTd`                                  |
 | `e`, `E`      | `1,$cOTXT`                                      |
-| `N,MmP`       | `IF P>M P-(M-N+1)+1,PmN-1
-IF P<N N-P,N-P+(M-N+1)mM` |
+| `N,MmP`       | <span>`IF P>M P-(M-N+1)+1,PmN-1`<br>`IF P<N N-P,N-P+(M-N+1)mM`</span> |
 | `N,MtP`       | `P+1,P+1+(M-N)d`                                |
 | `N,Mg,G,v,V`  | `N,McOTXT`                                      |
 | `N,Ms...`     | `N,McOTXT`                                      |
