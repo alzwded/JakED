@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <string>
 #include <sstream>
+#include <algorithm>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -47,18 +48,26 @@ class FileImpl : public ISwapImpl
     }
 
 public:
+#   pragma pack(push, 1)
+    struct Header
+    {
+        int32_t cutOffset;
+        int32_t cutLen;
+        int32_t undoOffset;
+        int32_t undoLen;
+    };
+#   pragma pack(pop)
+
     static ISwapImpl* Create()
     {
-        static char padding[] = 
-            "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0" // pos of cut buffer
-            "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0" // len of cut buffer
-            ;
+        Header head;
+        memset(&head, 0, sizeof(head));
 
         // try tmpfile
         FILE *f = tmpfile();
         if(f) {
             fseek(f, 0, SEEK_SET);
-            if(32 == fwrite(padding, 1, sizeof(int32_t) + sizeof(uint32_t), f)) {
+            if(1 == fwrite(&head, sizeof(Header), 1, f)) {
                 return new FileImpl(f, "");
             }
         }
@@ -72,7 +81,7 @@ public:
             f = fopen(name, "wb");
             if(f) {
                 fseek(f, 0, SEEK_SET);
-                if(32 == fwrite(padding, 1, sizeof(int32_t) + sizeof(uint32_t), f)) {
+                if(1 == fwrite(&head, sizeof(Header), 1, f)) {
                     return new FileImpl(f, name);
                 }
             }
@@ -97,53 +106,125 @@ public:
     void yank(std::list<std::string> const& lines) override
     {
         auto pos = ftell(m_file);
+
         uint32_t nBytes = 0;
         for(auto&& line : lines)
         {
             nBytes += line.size() + 1;
             fprintf(m_file, "%s\n", line.c_str());
         }
-        fseek(m_file, 0, SEEK_SET);
+
         int32_t asInt = pos & 0xFFFFFFFF;
-        fwrite(&asInt, sizeof(int32_t), 1, m_file);
-        fwrite(&nBytes, sizeof(uint32_t), 1, m_file);
+
+        Header head;
+        fseek(m_file, 0, SEEK_SET);
+        fread(&head, sizeof(Header), 1, m_file);
+
+        fseek(m_file, 0, SEEK_SET);
+        head.cutOffset = pos;
+        head.cutLen = nBytes;
+        fwrite(&head, sizeof(Header), 1, m_file);
+
         fseek(m_file, 0, SEEK_END);
+    }
+
+    void setUndo(
+            std::string const& command,
+            std::list<std::string> const& lines)
+        override
+    {
+        auto pos = ftell(m_file);
+
+        uint32_t nBytes = command.size();
+        fprintf(m_file, "%s\n", command.c_str());
+        for(auto&& line : lines)
+        {
+            nBytes += line.size() + 1;
+            fprintf(m_file, "%s\n", line.c_str());
+        }
+
+        int32_t asInt = pos & 0xFFFFFFFF;
+
+        Header head;
+        fseek(m_file, 0, SEEK_SET);
+        fread(&head, sizeof(Header), 1, m_file);
+
+        fseek(m_file, 0, SEEK_SET);
+        head.undoOffset = pos;
+        head.undoLen = nBytes;
+        fwrite(&head, sizeof(Header), 1, m_file);
+
+        fseek(m_file, 0, SEEK_END);
+    }
+
+    std::list<std::string> readLines(int32_t offset, uint32_t length)
+    {
+        std::list<std::string> rval;
+
+        fseek(m_file, offset, SEEK_SET);
+        char buf[1024];
+        bool waiting = false;
+        while(length > 0) {
+            int len = std::min(length, (uint32_t)(sizeof(buf) - 1));
+            fread(buf, 1, len, m_file);
+            length -= len;
+            buf[sizeof(buf) - 1] = '\0';
+            char* p = buf, *q;
+            while((p < buf + len)
+                    && (q = strchr(p, '\n')))
+            {
+                *q = '\0';
+                if(!waiting) rval.emplace_back(p);
+                else {
+                    rval.back() = rval.back() + p;
+                    waiting = false;
+                }
+                p = q + 1;
+            }
+            if(p < buf + len) {
+                rval.emplace_back(p);
+                waiting = true;
+            }
+        }
+        return rval;
     }
 
     std::list<std::string> paste() override
     {
         fseek(m_file, 0, SEEK_SET);
-        int32_t pos;
-        uint32_t len;
-        fread(&pos, sizeof(int32_t), 1, m_file);
-        fread(&len, sizeof(uint32_t), 1, m_file);
-        std::vector<char> buffer('\0', pos + 1);
-        fseek(m_file, pos, SEEK_SET);
-        fread(buffer.data(), sizeof(char), len, m_file);
-        fseek(m_file, 0, SEEK_END);
-        std::stringstream ss;
-        ss << buffer.data();
-        std::list<std::string> rval;
-        while(!ss.eof()) {
-            std::string line;
-            getline(ss, line, '\n');
-            rval.push_back(std::move(line));
-        }
-        return rval;
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+        if(head.cutLen == 0) return {};
+
+        return readLines(head.cutOffset, head.cutLen);
+    }
+
+    std::list<std::string> undo() override
+    {
+        fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+        if(head.undoLen == 0) return {};
+
+        return readLines(head.undoOffset, head.undoLen);
     }
 
     void w() override
     {
         fseek(m_file, 0, SEEK_SET);
-        int32_t pos;
-        uint32_t len;
-        fread(&pos, sizeof(int32_t), 1, m_file);
-        fread(&len, sizeof(uint32_t), 1, m_file);
-        std::vector<char> buffer('\0', pos + 1);
-        fseek(m_file, pos, SEEK_SET);
-        fread(buffer.data(), sizeof(char), len, m_file);
-        fseek(m_file, sizeof(int32_t) + sizeof(uint32_t), SEEK_SET);
-        fwrite(buffer.data(), sizeof(char), len, m_file);
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+
+        auto cutBuffer = paste();
+        auto undoBuffer = undo();
+        fseek(m_file, sizeof(Header), SEEK_SET);
+        yank(cutBuffer);
+        auto command = undoBuffer.front();
+        undoBuffer.pop_front();
+        setUndo(command, undoBuffer);
 
         HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(m_file));
         SetEndOfFile(hFile);
@@ -153,6 +234,7 @@ public:
 class MemoryImpl : public ISwapImpl
 {
     std::list<std::string> m_cutBuffer;
+    std::list<std::string> m_undoBuffer;
     MemoryImpl() : m_cutBuffer() {}
 public:
     static ISwapImpl* Create() { return new MemoryImpl(); }
@@ -167,6 +249,17 @@ public:
         return m_cutBuffer;
     }
     void w() override {}
+    std::list<std::string> undo() override
+    {
+        return m_undoBuffer;
+    }
+    void setUndo(
+            std::string const& command,
+            std::list<std::string> const& lines)
+        override
+    {
+        m_undoBuffer = lines;
+    }
 
 };
 
@@ -182,6 +275,8 @@ struct NullImpl: public ISwapImpl
     void yank(std::list<std::string> const& lines) override {}
     std::list<std::string> paste() override { return {}; }
     void w() override {}
+    std::list<std::string> undo() override { return {}; }
+    void setUndo(std::string const&, std::list<std::string> const&) override {}
 };
 
 Swapfile::Swapfile() : m_pImpl(nullptr)
@@ -223,4 +318,16 @@ std::list<std::string> Swapfile::paste()
 void Swapfile::w()
 {
     return m_pImpl->w();
+}
+
+std::list<std::string> Swapfile::undo()
+{
+    return m_pImpl->undo(); 
+}
+
+void Swapfile::setUndo(
+        std::string const& command,
+        std::list<std::string> const& lines)
+{
+    return m_pImpl->setUndo(command, lines);
 }

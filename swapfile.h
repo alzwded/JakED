@@ -10,6 +10,8 @@ struct ISwapImpl
     virtual void yank(std::list<std::string> const&) = 0;
     virtual std::list<std::string> paste() = 0;
     virtual void w() = 0;
+    virtual std::list<std::string> undo() = 0;
+    virtual void setUndo(std::string const&, std::list<std::string> const&) = 0;
 };
 
 class Swapfile
@@ -26,6 +28,8 @@ public:
     void yank(std::list<std::string> const&);
     std::list<std::string> paste();
     void w();
+    std::list<std::string> undo();
+    void setUndo(std::string const&, std::list<std::string> const&);
 };
 
 #endif
