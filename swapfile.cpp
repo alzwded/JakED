@@ -13,6 +13,8 @@
 #include <windows.h>
 #include <io.h>
 
+#undef DEBUG_SWAPFILE
+
 class FileImpl : public ISwapImpl
 {
     FILE* m_file;
@@ -99,20 +101,33 @@ public:
     {
         for(auto&& line : lines)
         {
-            fprintf(m_file, "%s\n", line.c_str());
+            fwrite(line.c_str(), 1, line.size(), m_file);
         }
     }
 
     void yank(std::list<std::string> const& lines) override
     {
+        // I've heard online that one must fseek(0, CUR) for ftell
+        // to work when switching between R&W in update mode; I even
+        // saw it written in some man 3 page somewhere. I could not
+        // find it in the last publicly published C standard draft,
+        // so IDK, based on pure observation, the first statement is
+        // correct. Maybe I haven't read the standard fully
+        fseek(m_file, 0, SEEK_CUR);
         auto pos = ftell(m_file);
 
         uint32_t nBytes = 0;
         for(auto&& line : lines)
         {
             nBytes += line.size() + 1;
-            fprintf(m_file, "%s\n", line.c_str());
+            fwrite(line.c_str(), 1, line.size(), m_file);
+            fwrite("\n", 1, 1, m_file);
         }
+        fseek(m_file, 0, SEEK_CUR);
+        auto endOfFile = ftell(m_file);
+#ifdef DEBUG_SWAPFILE
+        printf("pos = %d eof = %d\n", pos, endOfFile);
+#endif
 
         int32_t asInt = pos & 0xFFFFFFFF;
 
@@ -124,8 +139,14 @@ public:
         head.cutOffset = pos;
         head.cutLen = nBytes;
         fwrite(&head, sizeof(Header), 1, m_file);
+#ifdef DEBUG_SWAPFILE
+        printf("writing cut SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
+#endif
 
-        fseek(m_file, 0, SEEK_END);
+        fseek(m_file, endOfFile, SEEK_SET);
+#ifdef DEBUG_SWAPFILE
+        printf("bbq %d\n", ftell(m_file));
+#endif
     }
 
     void setUndo(
@@ -133,15 +154,23 @@ public:
             std::list<std::string> const& lines)
         override
     {
+        fseek(m_file, 0, SEEK_CUR);
         auto pos = ftell(m_file);
 
         uint32_t nBytes = command.size();
-        fprintf(m_file, "%s\n", command.c_str());
+        fwrite(command.c_str(), 1, command.size(), m_file);
+        fwrite("\n", 1, 1, m_file);
         for(auto&& line : lines)
         {
             nBytes += line.size() + 1;
-            fprintf(m_file, "%s\n", line.c_str());
+            fwrite(line.c_str(), 1, line.size(), m_file);
+            fwrite("\n", 1, 1, m_file);
         }
+        fseek(m_file, 0, SEEK_CUR);
+        auto endOfFile = ftell(m_file);
+#ifdef DEBUG_SWAPFILE
+        printf("pos = %d eof = %d\n", pos, endOfFile);
+#endif
 
         int32_t asInt = pos & 0xFFFFFFFF;
 
@@ -153,8 +182,14 @@ public:
         head.undoOffset = pos;
         head.undoLen = nBytes;
         fwrite(&head, sizeof(Header), 1, m_file);
+#ifdef DEBUG_SWAPFILE
+        printf("writing undo SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
+#endif
 
-        fseek(m_file, 0, SEEK_END);
+        fseek(m_file, endOfFile, SEEK_SET);
+#ifdef DEBUG_SWAPFILE
+        printf("bbq %d\n", ftell(m_file));
+#endif
     }
 
     std::list<std::string> readLines(int32_t offset, uint32_t length)
@@ -186,6 +221,7 @@ public:
                 waiting = true;
             }
         }
+        fseek(m_file, 0, SEEK_END);
         return rval;
     }
 
@@ -196,6 +232,9 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
         if(head.cutLen == 0) return {};
+#ifdef DEBUG_SWAPFILE
+        printf("SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
+#endif
 
         return readLines(head.cutOffset, head.cutLen);
     }
@@ -267,16 +306,21 @@ struct NullImpl: public ISwapImpl
 {
     static ISwapImpl* Create()
     {
-        fprintf(stderr, "Failed to create swap file.\n");
         return new NullImpl();
     }
 
-    void a(std::list<std::string> const& lines) override {}
-    void yank(std::list<std::string> const& lines) override {}
+    void a(std::list<std::string> const& lines) override {
+        fprintf(stderr, "Failed to create swap file.\n");
+    }
+    void yank(std::list<std::string> const& lines) override {
+        fprintf(stderr, "Failed to create swap file.\n");
+    }
     std::list<std::string> paste() override { return {}; }
     void w() override {}
     std::list<std::string> undo() override { return {}; }
-    void setUndo(std::string const&, std::list<std::string> const&) override {}
+    void setUndo(std::string const&, std::list<std::string> const&) override {
+        fprintf(stderr, "Failed to create swap file.\n");
+    }
 };
 
 Swapfile::Swapfile() : m_pImpl(nullptr)
@@ -291,6 +335,19 @@ Swapfile::Swapfile() : m_pImpl(nullptr)
         m_pImpl = (*f)();
         if(m_pImpl) return;
     }
+}
+
+void Swapfile::type(int t)
+{
+    ISwapImpl* (*factories[])() = {
+        &NullImpl::Create,
+        &MemoryImpl::Create,
+        &FileImpl::Create,
+        nullptr
+    };
+    if(t < 0 || t > sizeof(factories) / sizeof(factories[0])) std::terminate();
+    delete m_pImpl;
+    m_pImpl = (factories[t])();
 }
 
 Swapfile::Swapfile(ISwapImpl* impl) : m_pImpl(impl) {}

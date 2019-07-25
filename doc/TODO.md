@@ -38,6 +38,7 @@ Display
 -------
 
 + [x] .,.p
++ [ ] .,.l
 + [x] .,.pn
 + [x] .,.n
 + [x] zN
@@ -70,19 +71,19 @@ Commands
 
 *Line transfer, register update*:
 
-+ [ ] j
-+ [ ] jSEPARATOR join lines using SEPARATOR (extension)
++ [x] j
++ [x] jSEPARATOR join lines using SEPARATOR (extension)
 + [ ] .,.m.
 + [ ] move preserves registers
 + [ ] .,.t.
 
 *Cut buffer, register update*:
 
-+ [ ] cut buffer
-+ [ ] swap file: see [design document](UndoAndSwapFile.md)
-  * [ ] On w/W, buffer is cleared and re-initialized with current cut buffer
-  * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
-  * [ ] on clean exit, delete file
++ [x] cut buffer
++ [/] swap file: see [design document](UndoAndSwapFile.md)
+  * [/] On w/W, buffer is cleared and re-initialized with current cut buffer
+  * [/] if no I/O can be performed at all, keep everything in a giant stringstream
+  * [x] on clean exit, delete file
 
 + [x] .,.c
 + [x] .,.d
@@ -117,7 +118,7 @@ Internals, Externals and Other Tasks
 
 + [ ] refactor string processing
 + [x] scripting behaviour (cancel on error if !isatty)
-+ [ ] test that e&q cowardly refuse to exit
++ [/] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM
 + [ ] command line argument for P
 + [ ] arg: `-s` (suppress diagnostics)

@@ -309,6 +309,23 @@
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(ParseDotComma7) {
+            TEST_SETUP() {
+                g_state.line = 5;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                g_state.line = 1;
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange(";7p", i);
+                ASSERT(r.first == 5);
+                ASSERT(r.second == 7);
+                ASSERT(i == 2);
+            } TEST_RUN_END();
+        } END_TEST();
+
         SUITE_TEARDOWN() {
             g_state.lines.clear();
         } SUITE_TEARDOWN_END();

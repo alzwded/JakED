@@ -279,6 +279,7 @@ int main(int argc, char* argv[])
         exit(failed);
     }
 
+    g_state.swapfile.type(1);
     auto* suite = GetSuites()[argv[1]];
     if(suite) {
         HANDLE hTimer;

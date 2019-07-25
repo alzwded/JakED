@@ -23,6 +23,18 @@ public:
     Swapfile(ISwapImpl*);
     Swapfile(Swapfile const&) = delete;
     Swapfile& operator=(Swapfile const&) = delete;
+    enum {
+        DISABLE_SWAPFILE,
+        IN_MEMORY_SWAPFILE,
+        FILE_BACKED_SWAPFILE /** the default */
+    };
+    /**
+      * t: in, int
+      *    0 = disable swap file
+      *    1 = in-memory
+      *    2 = file-backed
+      */
+    void type(int t);
 
     void a(std::list<std::string> const&);
     void yank(std::list<std::string> const&);

@@ -64,6 +64,7 @@ struct {
     bool Hmode = false;
     int zWindow = 1;
     bool showPrompt = false;
+    Swapfile swapfile;
 } g_state;
 
 int Interactive_readCharFn()
@@ -556,6 +557,12 @@ namespace CommandsImpl {
                 g_state.registers.erase(g_state.registers.find(c));
             }
         }
+        decltype(g_state.lines) toYank(i1, i2);
+        g_state.swapfile.yank(toYank);
+        std::stringstream ss;
+        ss << r.first << "i";
+        g_state.swapfile.setUndo(ss.str(), toYank);
+
         g_state.lines.erase(i1, i2);
         g_state.dirty = true;
         g_state.line = r.first;
@@ -566,6 +573,32 @@ namespace CommandsImpl {
         d(r, "");
         //printf("executing %da\n", r.first - 1);
         return a(Range::S(r.first - 1), "");
+    }
+
+    void j(Range r, std::string tail)
+    {
+        if(r.first == r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
+        auto oldLines = g_state.swapfile.paste();
+        d(r, "");
+        auto lines = g_state.swapfile.paste();
+        std::stringstream ss;
+        size_t i = 0;
+        //printf(" I have %zd lines\n", lines.size());
+        for(auto&& line : lines) {
+            //printf("%s\n", line.c_str());
+            ss << line;
+            if(++i < lines.size()) ss << tail;
+        }
+        auto it = g_state.lines.begin();
+        std::advance(it, r.first - 1);
+        //printf("   inserting %s before %d\n", ss.str().c_str(), r.first);
+        g_state.lines.insert(it, ss.str());
+        g_state.line = r.first;
+
+        ss.str("");
+        ss << r.first << "," << r.second << "c";
+        g_state.swapfile.setUndo(ss.str(), lines);
+        g_state.swapfile.yank(oldLines);
     }
 
 }
@@ -592,6 +625,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'a', &CommandsImpl::a },
     { 'c', &CommandsImpl::c },
     { 'd', &CommandsImpl::d },
+    { 'j', &CommandsImpl::j },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -699,7 +733,7 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
     int left = 0;
     switch(s[i]) {
         case ';':
-            return std::make_tuple(Range::R(Range::Dot(), Range::Dollar()), i + 1);
+            return ParseFromComma(Range::Dot(), s, i, true);
         case '$':
             return std::make_tuple(Range::S(Range::Dollar()), i + 1);
         case ',':
@@ -730,6 +764,9 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
     bool whitespacing = true;
     i = SkipWS(s, i);
     switch(s[i]) {
+        case 'j':
+            r = Range::R(Range::Dot(), Range::Dot(1));
+            break;
         case '\0': case 'z':
             r = Range::S(Range::Dot(1));
             break;

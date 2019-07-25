@@ -13,6 +13,7 @@
             g_state.readCharFn = FAIL_readCharFn;
             g_state.writeStringFn = NULL_writeStringFn;
             g_state.zWindow = 1;
+            g_state.swapfile.type(Swapfile::IN_MEMORY_SWAPFILE);
         } SUITE_SETUP_END();
         DEF_TEST(LoadFile) {
             auto numLinesRead = new int(0);
@@ -414,3 +415,61 @@ Inserted Line 2
                 ASSERT( (*numLinesRead) == 12);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(jLinesBasic) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "Line 1Line 2Line 3Line 4Line 5\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('j')(Range::R(1, 5), "");
+                ASSERT(Range::Dot() == 1);
+                ASSERT(g_state.dirty);
+                Commands.at('p')(Range::S(1), "");
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
+        DEF_TEST(jLines) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "Line 1Line 2Line 3Line 4Line 5\n"); break;
+                    case 2: ASSERT(s == "Line 6, Line 7, Line 8, Line 9, Line 10\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('j')(Range::R(1, 5), "");
+                ASSERT(Range::Dot() == 1);
+                ASSERT(g_state.dirty);
+                Commands.at('j')(Range::R(2, Range::Dollar()), ", ");
+                ASSERT(Range::Dot() == 2);
+                ASSERT(g_state.dirty);
+                Commands.at('p')(Range::R(1, Range::Dollar()), "");
+                ASSERT( (*numLinesRead) == 2);
+            } TEST_RUN_END();
+        } END_TEST();
+
