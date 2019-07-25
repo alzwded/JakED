@@ -127,3 +127,5 @@ Internals, Externals and Other Tasks
 + [ ] jaked --version
 + [ ] some nice html documentation, like `ed`'s man page
 + [ ] read windows-native UTF16 files (`rutf16 somefile?`)
++ [ ] large file support (i.e. use getfpos and setfpos and update header to be 64bit)
++ [ ] test the `waiting` state in FileImpl::readLines
