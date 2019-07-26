@@ -50,7 +50,7 @@ HANDLE TheConsoleStdin = NULL;
 // forward way to release it, despite shennanigans going on in the CPU
 // cache line or w/e
 std::atomic<bool> ctrlc = false;
-struct {
+struct GState {
     std::string filename;
     int line;
     std::string PROMPT = "* ";
@@ -65,6 +65,37 @@ struct {
     bool Hmode = false;
     int zWindow = 1;
     bool showPrompt = false;
+
+    GState(decltype(filename) _filename = ""
+        , decltype(line) _line = 0
+        , decltype(PROMPT) _PROMPT = "* "
+        , decltype(swapfile)&& _swapfile = {Swapfile::IN_MEMORY_SWAPFILE}
+        , decltype(registers) _registers = {}
+        , decltype(nlines) _nlines = 0
+        , decltype(diagnostic) _diagnostic = ""
+        , decltype(dirty) _dirty = false
+        , decltype(readCharFn) _readCharFn = {}
+        , decltype(writeStringFn) _writeStringFn = {}
+        , decltype(error) _error = false
+        , decltype(Hmode) _Hmode = false
+        , decltype(zWindow) _zWindow = 1
+        , decltype(showPrompt) _showPrompt = false)
+        : filename(_filename)
+        , line(_line)
+        , PROMPT(_PROMPT)
+        , swapfile(std::move(_swapfile))
+        , registers(_registers)
+        , nlines(_nlines)
+        , diagnostic(_diagnostic)
+        , dirty(_dirty)
+        , readCharFn(_readCharFn)
+        , writeStringFn(_writeStringFn)
+        , error(_error)
+        , Hmode(_Hmode)
+        , zWindow(_zWindow)
+        , showPrompt(_showPrompt)
+    {}
+
 } g_state;
 
 int Interactive_readCharFn()

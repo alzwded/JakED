@@ -77,16 +77,22 @@ class Swapfile
 {
     ISwapImpl* m_pImpl;
 public:
-    Swapfile();
-    ~Swapfile();
-    Swapfile(ISwapImpl*);
-    Swapfile(Swapfile const&) = delete;
-    Swapfile& operator=(Swapfile const&) = delete;
     enum {
         DISABLE_SWAPFILE,
         IN_MEMORY_SWAPFILE,
         FILE_BACKED_SWAPFILE /** the default */
     };
+    Swapfile(int type = IN_MEMORY_SWAPFILE);
+    Swapfile() = delete;
+    Swapfile(Swapfile&& other)
+        : m_pImpl(nullptr)
+    {
+        std::swap(m_pImpl, other.m_pImpl);
+    }
+    ~Swapfile();
+    Swapfile(ISwapImpl*);
+    Swapfile(Swapfile const&) = delete;
+    Swapfile& operator=(Swapfile const&) = delete;
     /**
       * t: in, int
       *    0 = disable swap file

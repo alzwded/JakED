@@ -304,7 +304,7 @@ struct NullImpl: public FileImpl
 {
 };
 
-Swapfile::Swapfile() : m_pImpl(nullptr)
+Swapfile::Swapfile(int type) : m_pImpl(nullptr)
 {
     ISwapImpl* (*factories[])() = {
         &FileImpl::Create,
