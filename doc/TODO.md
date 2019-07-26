@@ -130,3 +130,4 @@ Internals, Externals and Other Tasks
 + [ ] large file support (i.e. use getfpos and setfpos and update header to be 64bit)
 + [ ] test the `waiting` state in FileImpl::readLines
 + [ ] rewrite swap file to be a giant linked list + a bunch of registers
++ [ ] command line flag for no swap file and env var to set swap file default directory

@@ -54,8 +54,9 @@ struct {
     std::string filename;
     int line;
     std::string PROMPT = "* ";
-    std::list<std::string> lines;
-    std::map<char, decltype(lines)::iterator> registers;
+    Swapfile swapfile;
+    std::map<char, LinePtr> registers;
+    size_t nlines;
     std::string diagnostic;
     bool dirty = false;
     std::function<char()> readCharFn;
@@ -64,7 +65,6 @@ struct {
     bool Hmode = false;
     int zWindow = 1;
     bool showPrompt = false;
-    Swapfile swapfile;
 } g_state;
 
 int Interactive_readCharFn()
@@ -188,19 +188,8 @@ struct Range
         return *this;
     }
     static int Dot(int offset = 0) { return g_state.line + offset; }
-    static int Dollar(int offset = 0) { return g_state.lines.size() + offset; }
-    static int Reg(char c) {
-        auto found = g_state.registers.find(c);
-        if(found == g_state.registers.end()) {
-            std::stringstream ss;
-            ss << "Nothing in register " << c;
-            throw std::runtime_error(ss.str());
-        }
-        return std::distance(g_state.lines.begin(), found->second);
-    }
-    static int Reg(char c, int offset) {
-        return Reg(c) + offset;
-    }
+    static int Dollar(int offset = 0) { return g_state.nlines + offset; }
+
     static Range ZERO() {
         return Range(0, 0);
     }
@@ -209,8 +198,8 @@ struct Range
     {
         if(_1 < 0) _1 = 0;
         if(_2 < 0) _2 = 0;
-        if(_1 > g_state.lines.size()) _1 = g_state.lines.size();
-        if(_2 > g_state.lines.size()) _2 = g_state.lines.size();
+        if(_1 > g_state.nlines) _1 = g_state.nlines;
+        if(_2 > g_state.nlines) _2 = g_state.nlines;
         if(_2 < _1) throw std::runtime_error("Backwards range");
         return Range(_1, _2);
     }
@@ -240,6 +229,7 @@ std::tuple<int, int> ReadNumber(std::string const&, int);
 namespace CommandsImpl {
     void r(Range range, std::string tail)
     {
+        int nthLine = range.second;
         tail = tail.substr(SkipWS(tail, 0));
         if(tail.empty()) tail = g_state.filename;
         if(tail.empty()) throw std::runtime_error("No such file!");
@@ -249,40 +239,52 @@ namespace CommandsImpl {
         }
         FILE* f = fopen(tail.c_str(), "r");
         if(f) {
-            auto after = g_state.lines.begin();
-            std::advance(after, range.second);
+            auto after = g_state.swapfile.head();
+            while(nthLine-- > 0
+                    && after->next())
+            {
+                after = after->next();
+            }
             std::stringstream line;
             int c;
+            bool bomChecked = false;
+            g_state.nlines = 0;
             while(!feof(f) && (c = fgetc(f)) != EOF) {
                 ++bytes;
                 if(c == '\n') {
-                    after = g_state.lines.insert(after, line.str());
+                    auto s = line.str();
+                    // clear UTF8 BOM if it's there
+                    if(!bomChecked && bytes > 3
+                            && s.find("\xEF" "\xBB" "\xBF") == 0)
+                    {
+                        s = s.substr(3);
+                        bomChecked = true;
+                    }
+                    auto inserted = g_state.swapfile.line(s);
+                    after->link(inserted);
+                    after = inserted;
+                    ++g_state.nlines;
                     //printf("> %s\n", line.str().c_str()); // FIXME some utf8 doesn't get right for some reason; might be utf16
-                    ++after;
                     line.str(std::string());
                 } else {
                     line << (char)(c & 0xFF);
                 }
             }
             if(line.str() != "") {
-                g_state.lines.insert(after, line.str());
-                ++after;
+                auto inserted = g_state.swapfile.line(line.str());
+                after->link(inserted);
+                after = inserted;
+                ++g_state.nlines;
             }
             fclose(f);
             g_state.dirty = true;
-            g_state.line = (int)std::distance(g_state.lines.begin(), after);
+            g_state.line = g_state.nlines;
             {
                 std::stringstream output;
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
-            // clear UTF8 BOM if it was there
-            auto firstLine = g_state.lines.begin();
-            std::advance(firstLine, range.second /* -1 + 1 */);
-            if(bytes > 0 && firstLine->find("\xEF" "\xBB" "\xBF") == 0) {
-                *firstLine = firstLine->substr(3);
-            }
-            //printf("%zd %d", g_state.lines.size(), g_state.line);
+            //printf("%zd %d", g_state.nlines, g_state.line);
         } else {
             throw std::runtime_error("No such file!");
         }
@@ -304,11 +306,14 @@ namespace CommandsImpl {
         } else {
             g_state.filename = tail;
         }
-        g_state.lines.clear();
         g_state.registers.clear();
+        auto undoBuffer = g_state.swapfile.line("1,$c");
+        undoBuffer->link(g_state.swapfile.head()->next());
+        g_state.swapfile.undo(undoBuffer);
+        g_state.swapfile.cut(g_state.swapfile.head()->next());
+        g_state.swapfile.head()->link();
         r(Range::S(0), tail);
         g_state.dirty = false;
-        if(g_state.lines.empty()) g_state.lines.emplace_back();
     }
 
     void e(Range range, std::string tail)
@@ -352,39 +357,26 @@ namespace CommandsImpl {
     void p(Range r, std::string tail)
     {
         int first = std::max(1, r.first);
+        int lineNumber = first;
         int second = std::max(1, r.second);
-        auto a = g_state.lines.begin();
-        auto b = g_state.lines.begin();
-        std::advance(a, first - 1);
-        std::advance(b, second);
-        for(auto it = a; it != b; ++it) {
+        auto i = g_state.swapfile.head();
+        while(first--) i->next();
+        first = r.first;
+        while(i && second--) {
             std::stringstream ss;
             if(tail[0] == 'n') {
                 ss << first++ << '\t';
             }
-            ss << *it << std::endl;
+            ss << i->text() << std::endl;
             g_state.writeStringFn(ss.str());
             if(ctrlc = ctrlc.load()) return;
         }
-        g_state.line = std::distance(g_state.lines.begin(), b);
+        g_state.line = r.second;
     }
 
     void n(Range r, std::string tail)
     {
-        int first = std::max(1, r.first);
-        int second = std::max(1, r.second);
-        auto a = g_state.lines.begin();
-        auto b = g_state.lines.begin();
-        std::advance(a, first - 1);
-        std::advance(b, second);
-        for(auto it = a; it != b; ++it) {
-            std::stringstream ss;
-            ss << first++ << '\t';
-            ss << *it << std::endl;
-            g_state.writeStringFn(ss.str());
-            if(ctrlc = ctrlc.load()) return;
-        }
-        g_state.line = std::distance(g_state.lines.begin(), b);
+        return p(r, "n");
     }
 
 
@@ -398,7 +390,7 @@ namespace CommandsImpl {
         if(tail.empty()) throw std::runtime_error("missing argument");
         if(tail[0] < 'a' || tail[0] > 'z') throw std::runtime_error("Invalid register. Registers must be a lowercase ASCII letter");
         int idx = r.second;
-        if(idx < 1 || idx > g_state.lines.size())
+        if(idx < 1 || idx > g_state.nlines)
             throw std::runtime_error("Address out of bounds");
         auto it = g_state.lines.begin();
         std::advance(it, (idx - 1));
@@ -423,7 +415,7 @@ namespace CommandsImpl {
 
     void EQUALS(Range r, std::string tail)
     {
-        if(r.second < 1 || r.second > g_state.lines.size()) throw std::runtime_error("invalid range");
+        if(r.second < 1 || r.second > g_state.nlines) throw std::runtime_error("invalid range");
         std::stringstream ss;
         ss << r.second << std::endl;
         g_state.writeStringFn(ss.str());
@@ -431,7 +423,7 @@ namespace CommandsImpl {
 
     void commonW(Range r, std::string fname, const char* mode)
     {
-        if(r.first < 1 || r.second < 1 || r.first > g_state.lines.size() || r.second > g_state.lines.size()) throw std::runtime_error("Invalid range");
+        if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw std::runtime_error("Invalid range");
         fname = getFileName(fname);
         FILE* f;
         if(fname[0] == '!') throw new std::runtime_error("Writing to pipe not implemented");
@@ -517,9 +509,9 @@ namespace CommandsImpl {
             ss << c;
         }
         g_state.lines.insert(before, lines.begin(), lines.end());
-        if(lines.size()) {
+        if(nlines) {
             g_state.dirty = true;
-            g_state.line = r.second + lines.size() - 1;
+            g_state.line = r.second + nlines - 1;
         }
     }
 
@@ -583,11 +575,11 @@ namespace CommandsImpl {
         auto lines = g_state.swapfile.paste();
         std::stringstream ss;
         size_t i = 0;
-        //printf(" I have %zd lines\n", lines.size());
+        //printf(" I have %zd lines\n", nlines);
         for(auto&& line : lines) {
             //printf("%s\n", line.c_str());
             ss << line;
-            if(++i < lines.size()) ss << tail;
+            if(++i < nlines) ss << tail;
         }
         auto it = g_state.lines.begin();
         std::advance(it, r.first - 1);

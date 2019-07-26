@@ -74,7 +74,7 @@ public:
         fsetpos(m_file, &offset);
         uint64_t nextPos = 0;
         fread(&nextPos, sizeof(uint64_t), 1, m_file);
-        if(nextPos == 0) return {};
+        if(nextPos == 0) return {}
         return std::make_shared<FileLine>(m_file, nextPos);
     }
 
