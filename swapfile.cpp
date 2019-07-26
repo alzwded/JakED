@@ -25,12 +25,14 @@ class FileLine : public ILine
     static_assert(sizeof(fpos_t) <= sizeof(uint64_t), "fpos_t is not convertible to uint64_t");
     uint64_t m_pos;
 public:
+#   pragma pack(push, 1)
     struct LineFormat
     {
         uint64_t next;
         uint16_t sz;
         char* text;
     };
+#   pragma pack(pop)
 
     bool operator==(ILine const& other) const
     {
@@ -213,8 +215,9 @@ public:
         memset(&fp, 0, sizeof(fp));
         fgetpos(m_file, &fp);
 
+        uint64_t zero = 0;
+        fwrite(&zero, sizeof(uint64_t), 1, m_file);
         uint16_t len = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
-        fwrite(0, sizeof(uint64_t), 1, m_file);
         fwrite(&len, sizeof(uint16_t), 1, m_file);
         fwrite(s.data(), 1, len, m_file);
 
@@ -230,7 +233,7 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
-        head.cut = pp->m_pos;
+        head.cut = (pp) ? pp->m_pos : 0;
         fseek(m_file, 0, SEEK_SET);
         fwrite(&head, sizeof(Header), 1, m_file);
 

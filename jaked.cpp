@@ -397,7 +397,7 @@ namespace CommandsImpl {
         int lineNumber = first;
         int second = std::max(1, r.second);
         auto i = g_state.swapfile.head();
-        while(first--) i->next();
+        while(first--) i = i->next();
         first = r.first;
         while(i && second--) {
             std::stringstream ss;
@@ -405,6 +405,7 @@ namespace CommandsImpl {
                 ss << first++ << '\t';
             }
             ss << i->text() << std::endl;
+            i = i->next();
             g_state.writeStringFn(ss.str());
             if(ctrlc = ctrlc.load()) return;
         }
@@ -536,6 +537,7 @@ namespace CommandsImpl {
         {
             after = after->next();
         }
+        auto linkMeAtTheEnd = after->next();
         size_t nLines = 0;
         std::stringstream ss;
         while(1) {
@@ -561,6 +563,7 @@ namespace CommandsImpl {
             ss << c;
         }
         if(nLines) {
+            after->link(linkMeAtTheEnd);
             g_state.dirty = true;
             g_state.line = r.second + nLines;
             ss.str("");
