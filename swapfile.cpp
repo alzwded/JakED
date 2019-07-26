@@ -86,6 +86,11 @@ public:
         uint64_t nextPos = (pp) ? pp->m_pos : 0;
         fwrite(&nextPos, sizeof(uint64_t), 1, m_file);
     }
+
+    LinePtr Copy() override
+    {
+        return std::make_shared<FileLine>(m_file, m_pos);
+    }
 };
 
 class FileImpl : public ISwapImpl

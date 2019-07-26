@@ -46,6 +46,7 @@ struct ILine
     inline void link(nullptr_t) { return link(std::shared_ptr<ILine>()); }
     virtual void link(std::shared_ptr<ILine> const& p) = 0;
     virtual bool operator==(ILine const& other) const = 0;
+    virtual std::shared_ptr<ILine> Copy() = 0;
 };
 typedef std::shared_ptr<ILine> LinePtr;
 

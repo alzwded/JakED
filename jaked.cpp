@@ -495,13 +495,6 @@ namespace CommandsImpl {
         p(Range::R(r.second, r.second + g_state.zWindow - 1), "");
     }
 
-    void i(Range r, std::string)
-    {
-        auto pos = r.second;
-        if(pos < 1 || pos >= g_state.nlines) throw std::runtime_error("Invalid range");
-        return a(Range::S(pos - 1), "");
-    }
-
     void a(Range r, std::string)
     {
         auto after = g_state.swapfile.head();
@@ -528,7 +521,7 @@ namespace CommandsImpl {
                 auto inserted = g_state.swapfile.line(ss.str());
                 after->link(inserted);
                 after = inserted;
-                g_state.lines++;
+                g_state.nlines++;
                 ss.str("");
                 continue;
             }
@@ -545,42 +538,60 @@ namespace CommandsImpl {
         }
     }
 
+    void i(Range r, std::string)
+    {
+        auto pos = r.second;
+        if(pos < 1 || pos >= g_state.nlines) throw std::runtime_error("Invalid range");
+        return a(Range::S(pos - 1), "");
+    }
+
     void d(Range r, std::string)
     {
-        auto i1 = g_state.lines.begin(),
-             i2 = g_state.lines.begin();
-        std::advance(i1, r.first - 1);
-        std::advance(i2, r.second);
         // clobber registers
         bool toErase[26] = { false, false, false,
             false, false, false, false, false,
             false, false, false, false, false, false,
             false, false, false, false, false, false,
             false, false, false, false, false, false};
-        for(auto&& kv : g_state.registers) {
-            //printf("checking r%c\n", kv.first);
-            for(auto i = i1; i != i2; ++i) {
-                if(ctrlc = ctrlc.load()) return;
-                if(kv.second == i) {
-                    //printf("marked r%c\n", kv.first);
-                    toErase[kv.first - 'a'] = true;
-                    continue;
+
+        auto it = g_state.swapfile.head();
+        auto idx = r.first;
+        while(idx-- > 1
+                && it->next())
+        {
+            it = it->next();
+        }
+        // it->next() is where we start deleting
+        auto beforeDelete = it->Copy();
+        it = it->next();
+        idx = r.second - r.first;
+        while(idx-- > 1) {
+            for(auto kv = g_state.registers.begin(); kv != g_state.registers.end(); ++kv) {
+                if(kv->second
+                        && kv->second == it)
+                {
+                    toErase[kv->first - 'a'] = true;
                 }
             }
+            it = it->next();
         }
+        auto empty = std::make_shared<ILine>();
+        auto beforeContinue = (it) ? it->Copy() : empty;
+        auto continueFromHere = (beforeContinue) ? beforeContinue->next() : empty;
+        beforeDelete->link(continueFromHere);
+        g_state.swapfile.cut(beforeDelete->next());
+        std::stringstream undoCommand;
+        undoCommand << r.first << "i";
+        auto inserted = g_state.swapfile.line(undoCommand.str());
+        g_state.swapfile.undo(inserted);
+
         for(char c = 'a'; c != 'z'; ++c) {
             if(toErase[c - 'a']) {
                 //printf("erasing r%c\n", c);
                 g_state.registers.erase(g_state.registers.find(c));
             }
         }
-        decltype(g_state.lines) toYank(i1, i2);
-        g_state.swapfile.yank(toYank);
-        std::stringstream ss;
-        ss << r.first << "i";
-        g_state.swapfile.setUndo(ss.str(), toYank);
 
-        g_state.lines.erase(i1, i2);
         g_state.dirty = true;
         g_state.line = r.first;
     }
