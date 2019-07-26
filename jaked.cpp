@@ -239,6 +239,7 @@ namespace CommandsImpl {
         }
         FILE* f = fopen(tail.c_str(), "r");
         if(f) {
+            int originalNlines = g_state.nlines;
             auto after = g_state.swapfile.head();
             while(nthLine-- > 0
                     && after->next())
@@ -284,6 +285,10 @@ namespace CommandsImpl {
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
+            std::stringstream undoCommandBuf;
+            undoCommandBuf << range.second << "," << (g_state.nlines - originalNlines) << "d";
+            auto undoCommand = g_state.swapfile.line(undoCommandBuf.str());
+            g_state.swapfile.undo(undoCommand);
             //printf("%zd %d", g_state.nlines, g_state.line);
         } else {
             throw std::runtime_error("No such file!");
@@ -392,9 +397,13 @@ namespace CommandsImpl {
         int idx = r.second;
         if(idx < 1 || idx > g_state.nlines)
             throw std::runtime_error("Address out of bounds");
-        auto it = g_state.lines.begin();
-        std::advance(it, (idx - 1));
-        g_state.registers[tail[0]] = it;
+        auto it = g_state.swapfile.head();
+        while(idx-- > 0
+                && it->next())
+        {
+            it = it->next();
+        }
+        g_state.registers[tail[0]] == it;
     }
 
     void f(Range r, std::string tail)
@@ -435,14 +444,16 @@ namespace CommandsImpl {
 
         size_t nBytes = 0;
 
-        auto i1 = g_state.lines.begin(), i2 = g_state.lines.begin();
-        std::advance(i1, r.first - 1);
-        std::advance(i2, r.second);
-        for(; i1 != i2; ++i1) {
-            nBytes += i1->size() + strlen("\n");
-            fprintf(f, "%s\n", i1->c_str());
+        auto i1 = g_state.swapfile.head();
+        auto first = r.first, second = r.second;
+        while(first-- > 0) i1 = i1->next();
+        while(second-- > 0 && i1) {
+            nBytes += i1->length() + strlen("\n");
+            fprintf(f, "%s\n", i1->text().c_str());
+            i1 = i1->next();
         }
         fclose(f);
+        g_state.swapfile.Rebuild();
         g_state.dirty = false;
         std::stringstream ss;
         ss << nBytes << std::endl;
