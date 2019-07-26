@@ -317,6 +317,7 @@ namespace CommandsImpl {
         g_state.swapfile.undo(undoBuffer);
         g_state.swapfile.cut(g_state.swapfile.head()->next());
         g_state.swapfile.head()->link();
+        g_state.nlines = 0;
         r(Range::S(0), tail);
         g_state.dirty = false;
     }
@@ -535,6 +536,7 @@ namespace CommandsImpl {
             ss << r.second + 1 << "," << (r.second + nLines) << "d";
             auto inserted = g_state.swapfile.line(ss.str());
             g_state.swapfile.undo(inserted);
+            g_state.nlines += nLines;
         }
     }
 
@@ -545,7 +547,7 @@ namespace CommandsImpl {
         return a(Range::S(pos - 1), "");
     }
 
-    void d(Range r, std::string)
+    void deleteLines(Range r, bool setCutBuffer)
     {
         // clobber registers
         bool toErase[26] = { false, false, false,
@@ -554,6 +556,7 @@ namespace CommandsImpl {
             false, false, false, false, false, false,
             false, false, false, false, false, false};
 
+        size_t linesDeleted = 1;
         auto it = g_state.swapfile.head();
         auto idx = r.first;
         while(idx-- > 1
@@ -566,6 +569,7 @@ namespace CommandsImpl {
         it = it->next();
         idx = r.second - r.first;
         while(idx-- > 1) {
+            ++linesDeleted;
             for(auto kv = g_state.registers.begin(); kv != g_state.registers.end(); ++kv) {
                 if(kv->second
                         && kv->second == it)
@@ -575,7 +579,7 @@ namespace CommandsImpl {
             }
             it = it->next();
         }
-        auto empty = std::make_shared<ILine>();
+        auto empty = LinePtr();
         auto beforeContinue = (it) ? it->Copy() : empty;
         auto continueFromHere = (beforeContinue) ? beforeContinue->next() : empty;
         beforeDelete->link(continueFromHere);
@@ -594,40 +598,60 @@ namespace CommandsImpl {
 
         g_state.dirty = true;
         g_state.line = r.first;
+        g_state.nlines -= linesDeleted;
     }
 
-    void c(Range r, std::string)
+    void d(Range r, std::string)
     {
-        d(r, "");
-        //printf("executing %da\n", r.first - 1);
-        return a(Range::S(r.first - 1), "");
+        return deleteLines(r, true);
     }
 
     void j(Range r, std::string tail)
     {
         if(r.first == r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
-        auto oldLines = g_state.swapfile.paste();
+        deleteLines(r, false);
         d(r, "");
-        auto lines = g_state.swapfile.paste();
+        auto oldLines = g_state.swapfile.undo()->next();
+        auto oldLinesDup = oldLines->Copy();
         std::stringstream ss;
-        size_t i = 0;
-        //printf(" I have %zd lines\n", nlines);
-        for(auto&& line : lines) {
-            //printf("%s\n", line.c_str());
-            ss << line;
-            if(++i < nlines) ss << tail;
+        while(oldLines) {
+            ss << oldLines->text();
+            if(oldLines->next()) ss << tail;
+            oldLines = oldLines->next();
         }
-        auto it = g_state.lines.begin();
-        std::advance(it, r.first - 1);
+        auto newLine = g_state.swapfile.line(ss.str());
+        auto idx = r.first - 1;
+        auto it = g_state.swapfile.head();
+        while(idx-- > 0
+                && it->next())
+        {
+            it = it->next();
+        }
+        it->link(newLine);
         //printf("   inserting %s before %d\n", ss.str().c_str(), r.first);
-        g_state.lines.insert(it, ss.str());
         g_state.line = r.first;
 
         ss.str("");
         ss << r.first << "," << r.second << "c";
-        g_state.swapfile.setUndo(ss.str(), lines);
-        g_state.swapfile.yank(oldLines);
+        auto newUndoCommand = g_state.swapfile.line(ss.str());
+        newUndoCommand->link(oldLinesDup);
+        g_state.swapfile.undo(newUndoCommand);
+        g_state.nlines += 1; // the inserted one
     }
+
+    void c(Range r, std::string)
+    {
+        deleteLines(r, true);
+        auto oldLines = g_state.swapfile.undo()->next();
+        auto currentNumLines = g_state.nlines;
+        a(Range::S(r.first - 1), "");
+        std::stringstream ss;
+        ss << r.first << "," << (r.first + g_state.nlines - currentNumLines - 1) << "c";
+        auto newUndoHead = g_state.swapfile.line(ss.str());
+        newUndoHead->link(oldLines);
+        g_state.swapfile.undo(newUndoHead);
+    }
+
 
 }
 
@@ -752,7 +776,13 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
         ss << "Register " << r << " is empty";
         throw std::runtime_error(ss.str());
     }
-    return ParseCommaOrOffset(std::distance(g_state.lines.begin(), found->second) + 1, s, i);
+    auto it = g_state.swapfile.head();
+    size_t index = 0;
+    while(it != found->second && it) {
+        it = it->next();
+        ++index;
+    }
+    return ParseCommaOrOffset(index, s, i);
 }
 
 std::tuple<Range, int> ParseRange(std::string const& s, int i)
