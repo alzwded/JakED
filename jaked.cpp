@@ -286,7 +286,7 @@ namespace CommandsImpl {
                 g_state.writeStringFn(output.str());
             }
             std::stringstream undoCommandBuf;
-            undoCommandBuf << range.second << "," << (g_state.nlines - originalNlines) << "d";
+            undoCommandBuf << range.second + 1 << "," << (g_state.nlines - originalNlines) << "d";
             auto undoCommand = g_state.swapfile.line(undoCommandBuf.str());
             g_state.swapfile.undo(undoCommand);
             //printf("%zd %d", g_state.nlines, g_state.line);
@@ -497,9 +497,21 @@ namespace CommandsImpl {
 
     void i(Range r, std::string)
     {
-        auto before = g_state.lines.begin();
-        std::advance(before, std::max(1, r.second) - 1);
-        std::list<std::string> lines;
+        auto pos = r.second;
+        if(pos < 1 || pos >= g_state.nlines) throw std::runtime_error("Invalid range");
+        return a(Range::S(pos - 1), "");
+    }
+
+    void a(Range r, std::string)
+    {
+        auto after = g_state.swapfile.head();
+        auto idx = std::max(0, r.second);
+        while(idx-- > 0
+                && after->next())
+        {
+            after = after->next();
+        }
+        size_t nLines = 0;
         std::stringstream ss;
         while(1) {
             char c = g_state.readCharFn();
@@ -512,23 +524,25 @@ namespace CommandsImpl {
                     break;
                 }
                 //printf("pushing line\n");
-                lines.push_back(ss.str());
+                nLines++;
+                auto inserted = g_state.swapfile.line(ss.str());
+                after->link(inserted);
+                after = inserted;
+                g_state.lines++;
                 ss.str("");
                 continue;
             }
             //printf("pushing char\n");
             ss << c;
         }
-        g_state.lines.insert(before, lines.begin(), lines.end());
-        if(nlines) {
+        if(nLines) {
             g_state.dirty = true;
-            g_state.line = r.second + nlines - 1;
+            g_state.line = r.second + nLines;
+            ss.str("");
+            ss << r.second + 1 << "," << (r.second + nLines) << "d";
+            auto inserted = g_state.swapfile.line(ss.str());
+            g_state.swapfile.undo(inserted);
         }
-    }
-
-    void a(Range r, std::string)
-    {
-        return i(Range::S(r.second + 1), "");
     }
 
     void d(Range r, std::string)
