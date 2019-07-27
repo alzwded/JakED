@@ -22,17 +22,17 @@ In C format:
 ```C
     struct Line
     {
-        struct Line* next;
+        struct Line *next;
         uint16_t sz;
-        char[sz] text;
+        char text[sz];
     };
 
     struct Header
     {
         struct Line head[1] = { &data[?], 0 };
-        struct Line* cut;
-        struct Line* undo;
-        struct Line[?] data;
+        struct Line *cut;
+        struct Line *undo;
+        struct Line data[?];
     };
 ```
 
