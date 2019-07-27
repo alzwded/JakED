@@ -844,6 +844,7 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     auto it = g_state.swapfile.head();
     size_t index = 0;
     while(it != found->second && it) {
+        //printf("%zd [%s]\n", index+1,it->text().c_str());
         it = it->next();
         ++index;
     }

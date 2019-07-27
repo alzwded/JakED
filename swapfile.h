@@ -37,21 +37,35 @@
             Executed 2c\nReplace line 1\nReplace line 2\n.
 */
 
+struct ILine;
+struct LinePtr
+{
+    std::shared_ptr<ILine> p;
+    LinePtr(std::shared_ptr<ILine> const& pp = {}) : p(pp) {}
+    bool operator==(LinePtr const& right) const;
+    inline bool operator!=(LinePtr const& right) const { return !operator==(right); }
+    explicit operator bool() const { return p.operator bool(); }
+    ILine* operator->() const { return p.operator->(); }
+    ILine& operator*() const { return p.operator*(); }
+    template<typename T>
+    T* DownCast() const { return dynamic_cast<T*>(p.get()); }
+    void reset(ILine* pp = nullptr) { p.reset(pp); }
+};
 struct ILine
 {
     virtual size_t length() = 0;
     virtual std::string text() = 0;
-    virtual std::shared_ptr<ILine> next() = 0;
-    inline void link() { return link(std::shared_ptr<ILine>()); }
-    inline void link(nullptr_t) { return link(std::shared_ptr<ILine>()); }
-    virtual void link(std::shared_ptr<ILine> const& p) = 0;
+    virtual LinePtr next() = 0;
+    inline void link() { return link(LinePtr()); }
+    inline void link(nullptr_t) { return link(LinePtr()); }
+    virtual void link(LinePtr const& p) = 0;
     virtual bool operator==(ILine const& other) const = 0;
-    virtual std::shared_ptr<ILine> Copy() = 0;
+    virtual LinePtr Copy() = 0;
 };
-typedef std::shared_ptr<ILine> LinePtr;
-
-inline bool operator==(LinePtr const& left, LinePtr const& right)
+inline bool LinePtr::operator==(LinePtr const& right) const
 {
+    auto left = *this;
+    //printf("operator==\n");
     if(left && right) return (*left) == (*right);
     if(!left && !right) return true;
     return false;

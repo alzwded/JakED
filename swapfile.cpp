@@ -38,6 +38,7 @@ public:
     {
         auto pp = dynamic_cast<FileLine const*>(&other);
         if(!pp) return false;
+        //printf("%zd %zd\n", m_pos, pp->m_pos);
         if(m_file != pp->m_file) return false;
         if(m_pos != pp->m_pos) return false;
         return true;
@@ -82,7 +83,7 @@ public:
 
     void link(LinePtr const& p) override
     {
-        auto pp = std::dynamic_pointer_cast<FileLine>(p);
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
         fpos_t offset = m_pos + offsetof(LineFormat, next);
         fsetpos(m_file, &offset);
         uint64_t nextPos = (pp) ? pp->m_pos : 0;
@@ -226,7 +227,7 @@ public:
 
     LinePtr cut(LinePtr const& p) override
     {
-        auto pp = std::dynamic_pointer_cast<FileLine>(p);
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
 
         fseek(m_file, 0, SEEK_SET);
         Header head;
@@ -242,7 +243,7 @@ public:
 
     LinePtr undo(LinePtr const& p)
     {
-        auto pp = std::dynamic_pointer_cast<FileLine>(p);
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
 
         fseek(m_file, 0, SEEK_SET);
         Header head;
