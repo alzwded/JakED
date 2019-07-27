@@ -715,7 +715,8 @@ namespace CommandsImpl {
 
     void j(Range r, std::string tail)
     {
-        if(r.first == r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
+        if(r.first >= r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
+        if(r.first < 1) throw std::runtime_error("Invalid range");
         deleteLines(r, false);
         auto oldLines = g_state.swapfile.undo()->next();
         auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
@@ -1104,7 +1105,7 @@ int main(int argc, char* argv[])
 
     std::string file = argv[1];
     if(file.empty()) exit_usage("No such file!", argv[0]);
-    Commands.at('E')(Range::ZERO(), file);
+    Commands.at('r')(Range::ZERO(), file);
 
     Loop();
     return 0;

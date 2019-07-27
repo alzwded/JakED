@@ -205,6 +205,11 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
+        if(head.cut == 0) {
+            cprintf<CPK::swap>("[%p] No cut buffer\n", m_file);
+            return {};
+        }
+
         cprintf<CPK::swap>("[%p] Cut buffer points to %I64d\n", m_file, head.cut);
         return std::make_shared<FileLine>(m_file, head.cut);
     }
@@ -215,6 +220,11 @@ public:
         Header head;
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
+
+        if(head.undo == 0) {
+            cprintf<CPK::swap>("[%p] No undo buffer\n", m_file);
+            return {};
+        }
 
         cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", m_file, head.undo);
         return std::make_shared<FileLine>(m_file, head.undo);
