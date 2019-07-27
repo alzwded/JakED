@@ -685,7 +685,7 @@ namespace CommandsImpl {
         auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
         std::stringstream ss;
         while(oldLines) {
-            printf("%s\n", oldLines->text().c_str());
+            //printf("%s\n", oldLines->text().c_str());
             ss << oldLines->text();
             if(oldLines->next()) ss << tail;
             oldLines = oldLines->next();
@@ -698,6 +698,7 @@ namespace CommandsImpl {
         {
             it = it->next();
         }
+        newLine->link( (it) ? it->next() : it );
         it->link(newLine);
         //printf("   inserting %s before %d\n", ss.str().c_str(), r.first);
         g_state.line = r.first;
