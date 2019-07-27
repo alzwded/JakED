@@ -426,7 +426,7 @@ namespace CommandsImpl {
     {
         int first = std::max(1, r.first);
         int lineNumber = first;
-        int second = std::max(1, r.second);
+        int second = std::max(1, r.second) - first + 1;
         auto i = g_state.swapfile.head();
         while(first--) i = i->next();
         first = r.first;

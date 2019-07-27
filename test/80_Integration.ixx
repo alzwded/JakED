@@ -121,6 +121,7 @@
                     case 1: break; case 2: ASSERT(s == "4\tLine 4\n"); break;
                     case 3: ASSERT(s == "5\tLine 5\n"); break;
                     default:
+                        fprintf(stderr, "Unexpected string %d: %s", *numLinesRead, s.c_str());
                         ASSERT(!"should not print so much");
                         break;
                     }
