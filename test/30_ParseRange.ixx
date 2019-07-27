@@ -1,10 +1,15 @@
 
         SUITE_SETUP() {
+            g_state();
+            auto after = g_state.swapfile.head();
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
                 ss << "Line " << i;
-                g_state.lines.push_back(ss.str());
+                auto line = g_state.swapfile.line(ss.str());
+                after->link(line);
+                after = line;
             }
+            g_state.nlines = 10;
             g_state.line = 1;
         } SUITE_SETUP_END();
 
@@ -153,7 +158,8 @@
                 int i = 0;
                 std::tie(r, i) = ParseRange(",", i);
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
                 ASSERT(i == 1);
             } TEST_RUN_END();
         } END_TEST();
@@ -209,7 +215,8 @@
                 int i = 0;
                 std::tie(r, i) = ParseRange("   1,$p", i);
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
                 ASSERT(i == 6);
             } TEST_RUN_END();
         } END_TEST();
@@ -219,7 +226,7 @@
                 int i = 0;
                 std::tie(r, i) = ParseRange(";pn", i);
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == CountLines());
                 ASSERT(i == 1);
             } TEST_RUN_END();
         } END_TEST();
@@ -261,7 +268,7 @@
         DEF_TEST(ParseRegister) {
             TEST_SETUP() {
                 g_state.line = 3;
-                g_state.registers['q'] = g_state.lines.begin();
+                g_state.registers['q'] = g_state.swapfile.head()->next();
             } TEST_SETUP_END();
             TEST_TEARDOWN() {
                 g_state.line = 1;
@@ -280,9 +287,8 @@
         DEF_TEST(ParseTwoRegistersWithOffsetsEach) {
             TEST_SETUP() {
                 g_state.line = 3;
-                g_state.registers['q'] = g_state.lines.begin();
-                g_state.registers['r'] = g_state.lines.begin();
-                std::advance(g_state.registers['r'], 3);
+                g_state.registers['q'] = g_state.swapfile.head()->next();
+                g_state.registers['r'] = g_state.swapfile.head()->next()->next()->next()->next();
             } TEST_SETUP_END();
             TEST_TEARDOWN() {
                 g_state.line = 1;
@@ -327,5 +333,5 @@
         } END_TEST();
 
         SUITE_TEARDOWN() {
-            g_state.lines.clear();
+            g_state();
         } SUITE_TEARDOWN_END();

@@ -55,6 +55,18 @@ char FAIL_readCharFn() {
 
 void NULL_writeStringFn(std::string const&) {}
 
+inline size_t CountLines()
+{
+    size_t n = 0;
+    for(auto i = g_state.swapfile.head();
+        i->next();
+        i = i->next())
+    {
+        ++n;
+    }
+    return n;
+}
+
 struct ATEST {
     static void NONE() {}
     static bool FAIL() { ASSERT(!"test body not defined"); return true; }

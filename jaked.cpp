@@ -96,6 +96,37 @@ struct GState {
         , showPrompt(_showPrompt)
     {}
 
+    void operator()(decltype(filename) _filename = ""
+        , decltype(line) _line = 0
+        , decltype(PROMPT) _PROMPT = "* "
+        , int _swapfile = Swapfile::IN_MEMORY_SWAPFILE
+        , decltype(registers) _registers = {}
+        , decltype(nlines) _nlines = 0
+        , decltype(diagnostic) _diagnostic = ""
+        , decltype(dirty) _dirty = false
+        , decltype(readCharFn) _readCharFn = {}
+        , decltype(writeStringFn) _writeStringFn = {}
+        , decltype(error) _error = false
+        , decltype(Hmode) _Hmode = false
+        , decltype(zWindow) _zWindow = 1
+        , decltype(showPrompt) _showPrompt = false)
+    {
+        filename = _filename;
+        line = _line;
+        PROMPT = _PROMPT;
+        swapfile.type(_swapfile);
+        registers = _registers;
+        nlines = _nlines;
+        diagnostic = _diagnostic;
+        dirty = _dirty;
+        readCharFn = _readCharFn;
+        writeStringFn = _writeStringFn;
+        error = _error;
+        Hmode = _Hmode;
+        zWindow = _zWindow;
+        showPrompt = _showPrompt;
+    }
+
 } g_state;
 
 int Interactive_readCharFn()

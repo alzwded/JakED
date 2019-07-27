@@ -1,22 +1,19 @@
 
         SUITE_SETUP() {
             // FIXME refactor this out
-            g_state.error = false;
-            g_state.Hmode = false;
-            g_state.line = 1;
-            g_state.lines.clear();
-            for(size_t i = 0; i < 20; ++i) {
+            g_state();
+            auto after = g_state.swapfile.head();
+            for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
-                ss << "Line " << (i + 1);
-                g_state.lines.push_back(ss.str());
+                ss << "Line " << i;
+                auto line = g_state.swapfile.line(ss.str());
+                after->link(line);
+                after = line;
             }
-            g_state.registers.clear();
-            g_state.diagnostic = "";
-            g_state.dirty = false;
+            g_state.nlines = 10;
+            g_state.line = 1;
             g_state.readCharFn = FAIL_readCharFn;
             g_state.writeStringFn = NULL_writeStringFn;
-            g_state.zWindow = 1;
-            g_state.swapfile.type(Swapfile::IN_MEMORY_SWAPFILE);
         } SUITE_SETUP_END();
         DEF_TEST(EditFileAndPrintAndExit) {
             auto numLinesRead = new int(0);

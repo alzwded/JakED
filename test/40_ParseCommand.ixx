@@ -1,10 +1,15 @@
 
         SUITE_SETUP() {
+            g_state();
+            auto after = g_state.swapfile.head();
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
                 ss << "Line " << i;
-                g_state.lines.push_back(ss.str());
+                auto line = g_state.swapfile.line(ss.str());
+                after->link(line);
+                after = line;
             }
+            g_state.nlines = 10;
             g_state.line = 1;
         } SUITE_SETUP_END();
         
@@ -15,7 +20,8 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand("1,$");
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
                 ASSERT(command == 'p');
                 ASSERT(tail == "");
             } TEST_RUN_END();
@@ -28,7 +34,8 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand("1,$p");
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
                 ASSERT(command == 'p');
                 ASSERT(tail == "");
             } TEST_RUN_END();
@@ -77,7 +84,8 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand(",n");
                 ASSERT(r.first == 1);
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
                 ASSERT(command == 'n');
             } TEST_RUN_END();
         } END_TEST();
@@ -108,7 +116,8 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand("=");
                 ASSERT(command == '=');
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
             } TEST_RUN_END();
         } END_TEST();
 
@@ -125,7 +134,8 @@
                 std::string tail;
                 std::tie(r, command, tail) = ParseCommand("r some special thing");
                 ASSERT(command == 'r');
-                ASSERT(r.second == g_state.lines.size());
+                ASSERT(r.second == g_state.nlines);
+                ASSERT(r.second == CountLines());
             } TEST_RUN_END();
         } END_TEST();
 
