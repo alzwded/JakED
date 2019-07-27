@@ -632,7 +632,7 @@ namespace CommandsImpl {
         // it->next() is where we start deleting
         auto beforeDelete = it->Copy();
         it = it->next();
-        idx = r.second - r.first;
+        idx = r.second - r.first + 1;
         while(idx-- > 1) {
             ++linesDeleted;
             for(auto kv = g_state.registers.begin(); kv != g_state.registers.end(); ++kv) {
