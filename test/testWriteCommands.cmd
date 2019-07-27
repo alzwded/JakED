@@ -13,6 +13,9 @@
     @IF ERRORLEVEL 1 EXIT /B 1
     @COMP test.tmp %~dpn1.ref /A /M
     @IF ERRORLEVEL 1 (
+        @ECHO %1
+        @TYPE %1
+        @ECHO --
         @ECHO test.tmp
         @TYPE test.tmp
         @ECHO ==

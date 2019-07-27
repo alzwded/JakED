@@ -1,22 +1,19 @@
 
         SUITE_SETUP() {
             // FIXME refactor this out
-            g_state.error = false;
-            g_state.Hmode = false;
-            g_state.line = 1;
-            g_state.lines.clear();
-            for(size_t i = 0; i < 20; ++i) {
+            g_state();
+            auto after = g_state.swapfile.head();
+            for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
-                ss << "Line " << (i + 1);
-                g_state.lines.push_back(ss.str());
+                ss << "Line " << i + 1;
+                auto line = g_state.swapfile.line(ss.str());
+                after->link(line);
+                after = line;
             }
-            g_state.registers.clear();
-            g_state.diagnostic = "";
-            g_state.dirty = false;
+            g_state.nlines = 10;
+            g_state.line = 1;
             g_state.readCharFn = FAIL_readCharFn;
             g_state.writeStringFn = NULL_writeStringFn;
-            g_state.zWindow = 1;
-            g_state.swapfile.type(Swapfile::IN_MEMORY_SWAPFILE);
         } SUITE_SETUP_END();
         DEF_TEST(EditFileAndPrintAndExit) {
             auto numLinesRead = new int(0);
@@ -252,6 +249,43 @@ p
                 ASSERT( (*numLinesRead) == 3);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(RSetsDotCorrectly) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+1r test\twolines.txt
+.=
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: break;
+                    case 2: break;
+                    case 3: ASSERT(s == "3\n"); break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
 
         DEF_TEST(RAppendsAtTheEndByDefault) {
             auto numLinesRead = std::make_shared<int>(0);
@@ -678,6 +712,42 @@ Inserted Line 2
                 ASSERT(Range::Dot() == 6);
                 ASSERT(g_state.dirty);
                 ASSERT(*numLinesRead == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(jLinesCannotJoin0) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(0,1j
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "?\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(Range::Dot() == 1);
+                ASSERT(!g_state.dirty);
+                ASSERT( (*numLinesRead) == 1);
             } TEST_RUN_END();
         } END_TEST();
 

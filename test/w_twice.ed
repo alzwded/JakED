@@ -1,0 +1,4 @@
+E test\twolines.txt
+1r test\twolines.txt
+w test.tmp
+w test.tmp

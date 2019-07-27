@@ -13,10 +13,101 @@
 #include <windows.h>
 #include <io.h>
 
-#undef DEBUG_SWAPFILE
+#include "cprintf.h"
+
+class FileImpl;
+class FileLine : public ILine
+{
+    friend class FileImpl;
+    FILE* const m_file;
+    static_assert(std::is_convertible<fpos_t, int64_t>::value, "fpos_t is not convertible to int64_t");
+    static_assert(std::is_convertible<int64_t, fpos_t>::value, "fpos_t is not convertible to int64_t");
+    static_assert(sizeof(fpos_t) <= sizeof(int64_t), "fpos_t is not convertible to int64_t");
+    int64_t m_pos;
+public:
+#   pragma pack(push, 1)
+    struct LineFormat
+    {
+        int64_t next;
+        uint16_t sz;
+        char* text;
+    };
+#   pragma pack(pop)
+
+    bool operator==(ILine const& other) const
+    {
+        auto pp = dynamic_cast<FileLine const*>(&other);
+        if(!pp) return false;
+        cprintf<CPK::swap>("FileLine== %zd %zd\n", m_pos, pp->m_pos);
+        if(m_file != pp->m_file) return false;
+        if(m_pos != pp->m_pos) return false;
+        return true;
+    }
+
+    FileLine(FILE* file, fpos_t pos)
+        : m_file(file)
+        , m_pos(pos)
+    {}
+
+    size_t length() override
+    {
+        fpos_t offset = m_pos + offsetof(LineFormat, sz);
+        fsetpos(m_file, &offset);
+        uint16_t len = 0;
+        fread(&len, 2, 1, m_file);
+        cprintf<CPK::swap>("[%p] Read length %u from %I64d\n", m_file, len, m_pos);
+        return len;
+    }
+
+    std::string text() override
+    {
+        fpos_t offset = m_pos + offsetof(LineFormat, sz);
+        fsetpos(m_file, &offset);
+        uint16_t len = 0;
+        fread(&len, 2, 1, m_file);
+        std::string rval(len, '\0');
+        offset = m_pos + offsetof(LineFormat, text);
+        fsetpos(m_file, &offset);
+        cprintf<CPK::swap>("[%p] Read %u chars from %I64d\n", m_file, len, m_pos);
+        fread(rval.data(), 1, len, m_file);
+        return rval;
+    }
+
+    LinePtr next() override
+    {
+        fpos_t offset = m_pos + offsetof(LineFormat, next);
+        fsetpos(m_file, &offset);
+        int64_t nextPos = 0;
+        fread(&nextPos, sizeof(int64_t), 1, m_file);
+        cprintf<CPK::swap>("[%p] next: %I64d -> %I64d\n", m_file, m_pos, nextPos);
+        if(nextPos == 0) return {};
+        return std::make_shared<FileLine>(m_file, nextPos);
+    }
+
+    void link(LinePtr const& p) override
+    {
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
+        fpos_t offset = m_pos + offsetof(LineFormat, next);
+        fsetpos(m_file, &offset);
+        int64_t nextPos = (pp) ? pp->m_pos : 0;
+        cprintf<CPK::swap>("[%p] link: %I64d -> %I64d\n", m_file, m_pos, nextPos);
+        fwrite(&nextPos, sizeof(int64_t), 1, m_file);
+    }
+
+    LinePtr Copy() override
+    {
+        return std::make_shared<FileLine>(m_file, m_pos);
+    }
+};
 
 class FileImpl : public ISwapImpl
 {
+   // I've heard online that one must fseek(0, CUR) for ftell
+   // to work when switching between R&W in update mode; I even
+   // saw it written in some man 3 page somewhere. I could not
+   // find it in the last publicly published C standard draft,
+   // so IDK, based on pure observation, the first statement is
+   // correct. Maybe I haven't read the standard fully
     FILE* m_file;
     std::string m_name;
     FileImpl(FILE* f, std::string name) : m_file(f), m_name(name) {}
@@ -33,6 +124,7 @@ class FileImpl : public ISwapImpl
         LPCSTR lpPath = tempDir, lpPrefix = "jed";
         DWORD uUnique = 0;
         if(GetTempFileNameA(lpPath, lpPrefix, uUnique, lpTempFileName)) {
+            cprintf<CPK::swap>("Computed temp file: %s\n", lpTempFileName);
             return lpTempFileName;
         }
         return "";
@@ -44,6 +136,7 @@ class FileImpl : public ISwapImpl
         LPCSTR lpPath = ".", lpPrefix = "jed";
         DWORD uUnique = 0;
         if(GetTempFileNameA(lpPath, lpPrefix, uUnique, lpTempFileName)) {
+            cprintf<CPK::swap>("Computed temp file: %s\n", lpTempFileName);
             return lpTempFileName;
         }
         return "";
@@ -53,10 +146,10 @@ public:
 #   pragma pack(push, 1)
     struct Header
     {
-        int32_t cutOffset;
-        int32_t cutLen;
-        int32_t undoOffset;
-        int32_t undoLen;
+        int64_t head;
+        uint16_t padding;
+        int64_t cut;
+        int64_t undo;
     };
 #   pragma pack(pop)
 
@@ -70,6 +163,7 @@ public:
         if(f) {
             fseek(f, 0, SEEK_SET);
             if(1 == fwrite(&head, sizeof(Header), 1, f)) {
+                cprintf<CPK::swap>("Will use tmpfile() [%p]\n", f);
                 return new FileImpl(f, "");
             }
         }
@@ -84,10 +178,12 @@ public:
             if(f) {
                 fseek(f, 0, SEEK_SET);
                 if(1 == fwrite(&head, sizeof(Header), 1, f)) {
+                    cprintf<CPK::swap>("--> will use this one [%p]\n", f);
                     return new FileImpl(f, name);
                 }
             }
         }
+        cprintf<CPK::swap>("Failed to create any temp file\n");
         return nullptr;
     }
 
@@ -97,233 +193,156 @@ public:
         if(m_name != "") remove(m_name.c_str());
     }
 
-    void a(std::list<std::string> const& lines) override
+    LinePtr head() override
     {
-        for(auto&& line : lines)
-        {
-            fwrite(line.c_str(), 1, line.size(), m_file);
-        }
+        return std::make_shared<FileLine>(m_file, offsetof(Header, head));
     }
 
-    void yank(std::list<std::string> const& lines) override
+    LinePtr cut() override
     {
-        // I've heard online that one must fseek(0, CUR) for ftell
-        // to work when switching between R&W in update mode; I even
-        // saw it written in some man 3 page somewhere. I could not
-        // find it in the last publicly published C standard draft,
-        // so IDK, based on pure observation, the first statement is
-        // correct. Maybe I haven't read the standard fully
-        fseek(m_file, 0, SEEK_CUR);
-        auto pos = ftell(m_file);
-
-        uint32_t nBytes = 0;
-        for(auto&& line : lines)
-        {
-            nBytes += line.size() + 1;
-            fwrite(line.c_str(), 1, line.size(), m_file);
-            fwrite("\n", 1, 1, m_file);
-        }
-        fseek(m_file, 0, SEEK_CUR);
-        auto endOfFile = ftell(m_file);
-#ifdef DEBUG_SWAPFILE
-        printf("pos = %d eof = %d\n", pos, endOfFile);
-#endif
-
-        int32_t asInt = pos & 0xFFFFFFFF;
-
-        Header head;
         fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
-        fseek(m_file, 0, SEEK_SET);
-        head.cutOffset = pos;
-        head.cutLen = nBytes;
-        fwrite(&head, sizeof(Header), 1, m_file);
-#ifdef DEBUG_SWAPFILE
-        printf("writing cut SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
-#endif
+        if(head.cut == 0) {
+            cprintf<CPK::swap>("[%p] No cut buffer\n", m_file);
+            return {};
+        }
 
-        fseek(m_file, endOfFile, SEEK_SET);
-#ifdef DEBUG_SWAPFILE
-        printf("bbq %d\n", ftell(m_file));
-#endif
+        cprintf<CPK::swap>("[%p] Cut buffer points to %I64d\n", m_file, head.cut);
+        return std::make_shared<FileLine>(m_file, head.cut);
     }
 
-    void setUndo(
-            std::string const& command,
-            std::list<std::string> const& lines)
-        override
+    LinePtr undo() override
     {
-        fseek(m_file, 0, SEEK_CUR);
-        auto pos = ftell(m_file);
-
-        uint32_t nBytes = command.size();
-        fwrite(command.c_str(), 1, command.size(), m_file);
-        fwrite("\n", 1, 1, m_file);
-        for(auto&& line : lines)
-        {
-            nBytes += line.size() + 1;
-            fwrite(line.c_str(), 1, line.size(), m_file);
-            fwrite("\n", 1, 1, m_file);
-        }
-        fseek(m_file, 0, SEEK_CUR);
-        auto endOfFile = ftell(m_file);
-#ifdef DEBUG_SWAPFILE
-        printf("pos = %d eof = %d\n", pos, endOfFile);
-#endif
-
-        int32_t asInt = pos & 0xFFFFFFFF;
-
-        Header head;
         fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
-        fseek(m_file, 0, SEEK_SET);
-        head.undoOffset = pos;
-        head.undoLen = nBytes;
-        fwrite(&head, sizeof(Header), 1, m_file);
-#ifdef DEBUG_SWAPFILE
-        printf("writing undo SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
-#endif
+        if(head.undo == 0) {
+            cprintf<CPK::swap>("[%p] No undo buffer\n", m_file);
+            return {};
+        }
 
-        fseek(m_file, endOfFile, SEEK_SET);
-#ifdef DEBUG_SWAPFILE
-        printf("bbq %d\n", ftell(m_file));
-#endif
+        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", m_file, head.undo);
+        return std::make_shared<FileLine>(m_file, head.undo);
     }
 
-    std::list<std::string> readLines(int32_t offset, uint32_t length)
+    LinePtr line(std::string const& s) override
     {
-        std::list<std::string> rval;
-
-        fseek(m_file, offset, SEEK_SET);
-        char buf[1024];
-        bool waiting = false;
-        while(length > 0) {
-            int len = std::min(length, (uint32_t)(sizeof(buf) - 1));
-            fread(buf, 1, len, m_file);
-            length -= len;
-            buf[sizeof(buf) - 1] = '\0';
-            char* p = buf, *q;
-            while((p < buf + len)
-                    && (q = strchr(p, '\n')))
-            {
-                *q = '\0';
-                if(!waiting) rval.emplace_back(p);
-                else {
-                    rval.back() = rval.back() + p;
-                    waiting = false;
-                }
-                p = q + 1;
-            }
-            if(p < buf + len) {
-                rval.emplace_back(p);
-                waiting = true;
-            }
-        }
         fseek(m_file, 0, SEEK_END);
-        return rval;
+        fpos_t fp;
+        memset(&fp, 0, sizeof(fp));
+        fgetpos(m_file, &fp);
+
+        cprintf<CPK::swap>("[%p] Adding line to %I64d\n", m_file, fp);
+        int64_t zero = 0;
+        fwrite(&zero, sizeof(int64_t), 1, m_file);
+        uint16_t len = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
+        fwrite(&len, sizeof(uint16_t), 1, m_file);
+        fwrite(s.data(), 1, len, m_file);
+        cprintf<CPK::swap>("--> wrote %u chars\n", len);
+
+        return std::make_shared<FileLine>(m_file, fp);
     }
 
-    std::list<std::string> paste() override
+    LinePtr cut(LinePtr const& p) override
     {
-        fseek(m_file, 0, SEEK_SET);
-        Header head;
-        memset(&head, 0, sizeof(Header));
-        fread(&head, sizeof(Header), 1, m_file);
-        if(head.cutLen == 0) return {};
-#ifdef DEBUG_SWAPFILE
-        printf("SF header %d %d %d %d\n", head.cutOffset, head.cutLen, head.undoOffset, head.undoLen);
-#endif
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
 
-        return readLines(head.cutOffset, head.cutLen);
-    }
-
-    std::list<std::string> undo() override
-    {
-        fseek(m_file, 0, SEEK_SET);
-        Header head;
-        memset(&head, 0, sizeof(Header));
-        fread(&head, sizeof(Header), 1, m_file);
-        if(head.undoLen == 0) return {};
-
-        return readLines(head.undoOffset, head.undoLen);
-    }
-
-    void w() override
-    {
         fseek(m_file, 0, SEEK_SET);
         Header head;
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
-        auto cutBuffer = paste();
-        auto undoBuffer = undo();
-        fseek(m_file, sizeof(Header), SEEK_SET);
-        yank(cutBuffer);
-        auto command = undoBuffer.front();
-        undoBuffer.pop_front();
-        setUndo(command, undoBuffer);
+        cprintf<CPK::swap>("[%p] Cut buffer was %I64d\n", m_file, head.cut);
 
-        HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(m_file));
-        SetEndOfFile(hFile);
+        head.cut = (pp) ? pp->m_pos : 0;
+        fseek(m_file, 0, SEEK_SET);
+        fwrite(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("--> set cut buffer to %I64d\n", head.cut);
+
+        return p;
+    }
+
+    LinePtr undo(LinePtr const& p)
+    {
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
+
+        fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head.undo);
+
+        head.undo = pp->m_pos;
+        fseek(m_file, 0, SEEK_SET);
+        fwrite(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head.undo);
+
+        return p;
+    }
+
+    void Rebuild() override
+    {
+        cprintf<CPK::swap>("[%p] Rebuilding swap file\n", m_file);
+        auto cutBuffer = this->cut();
+        auto undoBuffer = this->undo();
+        auto l = this->head();
+
+        std::unique_ptr<FileImpl> temp((FileImpl*)FileImpl::Create());
+        cprintf<CPK::swap>("Relinking text\n");
+        LinePtr prev = temp->head();
+        for(l = l->next(); l; l = l->next()) {
+            auto inserted = temp->line(l->text());
+            prev->link(inserted);
+            prev = inserted;
+        }
+        bool overlapTempCut = false;
+        prev.reset();
+        cprintf<CPK::swap>("Writing undo buffer\n");
+        for(; undoBuffer; undoBuffer = undoBuffer->next()) {
+            auto inserted = temp->line(undoBuffer->text());
+            if(undoBuffer == cutBuffer) {
+                temp->cut(inserted);
+                overlapTempCut = true;
+                cprintf<CPK::swap>("Detected overlap between undo and cut buffers\n");
+            }
+            if(prev) prev->link(inserted);
+            else {
+                prev = inserted;
+                temp->undo(inserted);
+            }
+        }
+        if(!overlapTempCut) {
+            cprintf<CPK::swap>("Writing cut buffer\n");
+            prev.reset();
+            for(; cutBuffer; cutBuffer = cutBuffer->next()) {
+                auto inserted = temp->line(cutBuffer->text());
+                if(prev) prev->link(inserted);
+                else {
+                    prev = inserted;
+                    temp->cut(inserted);
+                }
+            }
+        }
+
+        std::swap(m_file, temp->m_file);
+        std::swap(m_name, temp->m_name);
     }
 };
 
-class MemoryImpl : public ISwapImpl
+class MemoryImpl : public FileImpl
 {
-    std::list<std::string> m_cutBuffer;
-    std::list<std::string> m_undoBuffer;
-    MemoryImpl() : m_cutBuffer() {}
-public:
-    static ISwapImpl* Create() { return new MemoryImpl(); }
-
-    void a(std::list<std::string> const&) override {}
-    void yank(std::list<std::string> const& lines) override
-    {
-        m_cutBuffer = lines;
-    }
-    std::list<std::string> paste() override
-    {
-        return m_cutBuffer;
-    }
-    void w() override {}
-    std::list<std::string> undo() override
-    {
-        return m_undoBuffer;
-    }
-    void setUndo(
-            std::string const& command,
-            std::list<std::string> const& lines)
-        override
-    {
-        m_undoBuffer = lines;
-    }
-
 };
 
-struct NullImpl: public ISwapImpl
+struct NullImpl: public FileImpl
 {
-    static ISwapImpl* Create()
-    {
-        return new NullImpl();
-    }
-
-    void a(std::list<std::string> const& lines) override {
-        fprintf(stderr, "Failed to create swap file.\n");
-    }
-    void yank(std::list<std::string> const& lines) override {
-        fprintf(stderr, "Failed to create swap file.\n");
-    }
-    std::list<std::string> paste() override { return {}; }
-    void w() override {}
-    std::list<std::string> undo() override { return {}; }
-    void setUndo(std::string const&, std::list<std::string> const&) override {
-        fprintf(stderr, "Failed to create swap file.\n");
-    }
 };
 
-Swapfile::Swapfile() : m_pImpl(nullptr)
+Swapfile::Swapfile(int type) : m_pImpl(nullptr)
 {
     ISwapImpl* (*factories[])() = {
         &FileImpl::Create,
@@ -339,6 +358,7 @@ Swapfile::Swapfile() : m_pImpl(nullptr)
 
 void Swapfile::type(int t)
 {
+    t = 2;
     ISwapImpl* (*factories[])() = {
         &NullImpl::Create,
         &MemoryImpl::Create,
@@ -357,34 +377,11 @@ Swapfile::~Swapfile()
     delete m_pImpl;
 }
 
-void Swapfile::a(std::list<std::string> const& lines)
-{
-    return m_pImpl->a(lines);
-}
+LinePtr Swapfile::head() { return m_pImpl->head(); }
+LinePtr Swapfile::cut() { return m_pImpl->cut(); }
+LinePtr Swapfile::undo() { return m_pImpl->undo(); }
+LinePtr Swapfile::line(std::string const& s) { return m_pImpl->line(s); }
+LinePtr Swapfile::undo(LinePtr const& l) { return m_pImpl->undo(l); }
+LinePtr Swapfile::cut(LinePtr const& l) { return m_pImpl->cut(l); }
+void Swapfile::Rebuild() { return m_pImpl->Rebuild(); }
 
-void Swapfile::yank(std::list<std::string> const& lines)
-{
-    return m_pImpl->yank(lines);
-}
-
-std::list<std::string> Swapfile::paste()
-{
-    return m_pImpl->paste();
-}
-
-void Swapfile::w()
-{
-    return m_pImpl->w();
-}
-
-std::list<std::string> Swapfile::undo()
-{
-    return m_pImpl->undo(); 
-}
-
-void Swapfile::setUndo(
-        std::string const& command,
-        std::list<std::string> const& lines)
-{
-    return m_pImpl->setUndo(command, lines);
-}

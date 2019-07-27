@@ -1,19 +1,18 @@
 
         SUITE_SETUP() {
-            g_state.line = 1;
-            g_state.lines.clear();
+            g_state();
+            auto after = g_state.swapfile.head();
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
-                ss << "Line " << (i + 1);
-                g_state.lines.push_back(ss.str());
+                ss << "Line " << i + 1;
+                auto line = g_state.swapfile.line(ss.str());
+                after->link(line);
+                after = line;
             }
-            g_state.registers.clear();
-            g_state.diagnostic = "";
-            g_state.dirty = false;
+            g_state.nlines = 10;
+            g_state.line = 1;
             g_state.readCharFn = FAIL_readCharFn;
             g_state.writeStringFn = NULL_writeStringFn;
-            g_state.zWindow = 1;
-            g_state.swapfile.type(Swapfile::IN_MEMORY_SWAPFILE);
         } SUITE_SETUP_END();
         DEF_TEST(LoadFile) {
             auto numLinesRead = new int(0);
@@ -122,6 +121,7 @@
                     case 1: break; case 2: ASSERT(s == "4\tLine 4\n"); break;
                     case 3: ASSERT(s == "5\tLine 5\n"); break;
                     default:
+                        fprintf(stderr, "Unexpected string %d: %s", *numLinesRead, s.c_str());
                         ASSERT(!"should not print so much");
                         break;
                     }
