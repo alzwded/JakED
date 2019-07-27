@@ -164,7 +164,7 @@ int Interactive_readCharFn()
                 1,
                 &rv,
                 NULL);
-        cprintf<CPK::CTRLC>("rv %d c %d\n", rv, c);
+        cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
         // You can probably guess success == true and rv = 0,
         // but w/e. If that happened...
         if(GetLastError() == ERROR_OPERATION_ABORTED) {
@@ -182,7 +182,7 @@ int Interactive_readCharFn()
         // In the event that ReadConsoleA fails (I never saw it fail yet)
         // then report some error and exit.
         if(!success) {
-            fprintf(stderr, "ReadConsoleA failed with %d\n", GetLastError());
+            fprintf(stderr, "ReadConsoleA failed with %lu\n", GetLastError());
             return EOF;
         }
 
@@ -208,7 +208,7 @@ int Interactive_readCharFn()
         // Okay, if ctrlc is triggered, return some BS character.
         // The caller will handle the flag.
         if(ctrlc = ctrlc.load()) {
-            cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n", c);
+            cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
             return '\0';
         }
         // If STDIN got closed, return EOF.
@@ -405,7 +405,7 @@ namespace CommandsImpl {
 
     void Q(Range r, std::string tail)
     {
-        cprintf<CPK::Q>("in Q %d\n", g_state.error);
+        cprintf<CPK::Q>("in Q %d\n", (int)g_state.error);
 #ifdef JAKED_TEST
         throw application_exit(g_state.error);
 #endif

@@ -20,15 +20,15 @@ class FileLine : public ILine
 {
     friend class FileImpl;
     FILE* const m_file;
-    static_assert(std::is_convertible<fpos_t, uint64_t>::value, "fpos_t is not convertible to uint64_t");
-    static_assert(std::is_convertible<uint64_t, fpos_t>::value, "fpos_t is not convertible to uint64_t");
-    static_assert(sizeof(fpos_t) <= sizeof(uint64_t), "fpos_t is not convertible to uint64_t");
-    uint64_t m_pos;
+    static_assert(std::is_convertible<fpos_t, int64_t>::value, "fpos_t is not convertible to int64_t");
+    static_assert(std::is_convertible<int64_t, fpos_t>::value, "fpos_t is not convertible to int64_t");
+    static_assert(sizeof(fpos_t) <= sizeof(int64_t), "fpos_t is not convertible to int64_t");
+    int64_t m_pos;
 public:
 #   pragma pack(push, 1)
     struct LineFormat
     {
-        uint64_t next;
+        int64_t next;
         uint16_t sz;
         char* text;
     };
@@ -55,7 +55,7 @@ public:
         fsetpos(m_file, &offset);
         uint16_t len = 0;
         fread(&len, 2, 1, m_file);
-        cprintf<CPK::swap>("[%p] Read length %d from %I64d\n", m_file, len, m_pos);
+        cprintf<CPK::swap>("[%p] Read length %u from %I64d\n", m_file, len, m_pos);
         return len;
     }
 
@@ -68,7 +68,7 @@ public:
         std::string rval(len, '\0');
         offset = m_pos + offsetof(LineFormat, text);
         fsetpos(m_file, &offset);
-        cprintf<CPK::swap>("[%p] Read %d chars from %I64d\n", m_file, len, m_pos);
+        cprintf<CPK::swap>("[%p] Read %u chars from %I64d\n", m_file, len, m_pos);
         fread(rval.data(), 1, len, m_file);
         return rval;
     }
@@ -77,8 +77,8 @@ public:
     {
         fpos_t offset = m_pos + offsetof(LineFormat, next);
         fsetpos(m_file, &offset);
-        uint64_t nextPos = 0;
-        fread(&nextPos, sizeof(uint64_t), 1, m_file);
+        int64_t nextPos = 0;
+        fread(&nextPos, sizeof(int64_t), 1, m_file);
         cprintf<CPK::swap>("[%p] next: %I64d -> %I64d\n", m_file, m_pos, nextPos);
         if(nextPos == 0) return {};
         return std::make_shared<FileLine>(m_file, nextPos);
@@ -89,9 +89,9 @@ public:
         auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
         fpos_t offset = m_pos + offsetof(LineFormat, next);
         fsetpos(m_file, &offset);
-        uint64_t nextPos = (pp) ? pp->m_pos : 0;
+        int64_t nextPos = (pp) ? pp->m_pos : 0;
         cprintf<CPK::swap>("[%p] link: %I64d -> %I64d\n", m_file, m_pos, nextPos);
-        fwrite(&nextPos, sizeof(uint64_t), 1, m_file);
+        fwrite(&nextPos, sizeof(int64_t), 1, m_file);
     }
 
     LinePtr Copy() override
@@ -146,10 +146,10 @@ public:
 #   pragma pack(push, 1)
     struct Header
     {
-        uint64_t head;
+        int64_t head;
         uint16_t padding;
-        uint64_t cut;
-        uint64_t undo;
+        int64_t cut;
+        int64_t undo;
     };
 #   pragma pack(pop)
 
@@ -228,12 +228,12 @@ public:
         fgetpos(m_file, &fp);
 
         cprintf<CPK::swap>("[%p] Adding line to %I64d\n", m_file, fp);
-        uint64_t zero = 0;
-        fwrite(&zero, sizeof(uint64_t), 1, m_file);
+        int64_t zero = 0;
+        fwrite(&zero, sizeof(int64_t), 1, m_file);
         uint16_t len = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
         fwrite(&len, sizeof(uint16_t), 1, m_file);
         fwrite(s.data(), 1, len, m_file);
-        cprintf<CPK::swap>("--> wrote %d chars\n", len);
+        cprintf<CPK::swap>("--> wrote %u chars\n", len);
 
         return std::make_shared<FileLine>(m_file, fp);
     }
