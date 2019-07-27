@@ -647,12 +647,18 @@ namespace CommandsImpl {
         auto empty = LinePtr();
         auto beforeContinue = (it) ? it->Copy() : empty;
         auto continueFromHere = (beforeContinue) ? beforeContinue->next() : empty;
-        beforeDelete->link(continueFromHere);
-        g_state.swapfile.cut(beforeDelete->next());
+        if(beforeContinue) beforeContinue->link();
+
+        if(setCutBuffer) {
+            g_state.swapfile.cut(beforeDelete->next());
+        }
         std::stringstream undoCommand;
         undoCommand << r.first << "i";
         auto inserted = g_state.swapfile.line(undoCommand.str());
+        inserted->link(beforeDelete->next());
         g_state.swapfile.undo(inserted);
+
+        beforeDelete->link(continueFromHere);
 
         for(char c = 'a'; c != 'z'; ++c) {
             if(toErase[c - 'a']) {
@@ -675,11 +681,11 @@ namespace CommandsImpl {
     {
         if(r.first == r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
         deleteLines(r, false);
-        d(r, "");
         auto oldLines = g_state.swapfile.undo()->next();
-        auto oldLinesDup = oldLines->Copy();
+        auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
         std::stringstream ss;
         while(oldLines) {
+            printf("%s\n", oldLines->text().c_str());
             ss << oldLines->text();
             if(oldLines->next()) ss << tail;
             oldLines = oldLines->next();
