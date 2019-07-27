@@ -147,9 +147,9 @@ public:
     struct Header
     {
         uint64_t head;
+        uint16_t padding;
         uint64_t cut;
         uint64_t undo;
-        uint16_t padding;
     };
 #   pragma pack(pop)
 
