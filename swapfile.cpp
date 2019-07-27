@@ -38,7 +38,7 @@ public:
     {
         auto pp = dynamic_cast<FileLine const*>(&other);
         if(!pp) return false;
-        printf("FileLine== %zd %zd\n", m_pos, pp->m_pos);
+        //printf("FileLine== %zd %zd\n", m_pos, pp->m_pos);
         if(m_file != pp->m_file) return false;
         if(m_pos != pp->m_pos) return false;
         return true;

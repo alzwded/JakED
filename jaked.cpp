@@ -235,7 +235,7 @@ int Interactive_readCharFn()
 
 void Interactive_writeStringFn(std::string const& s)
 {
-    printf("%s", s.c_str());
+    fprintf(stdout, "%s", s.c_str());
 }
 
 struct Range
@@ -317,7 +317,7 @@ namespace CommandsImpl {
                 if(c == '\n') {
                     auto s = line.str();
                     // clear UTF8 BOM if it's there
-                    if(!bomChecked && bytes > 3
+                    if(!bomChecked && bytes >= 3
                             && s.find("\xEF" "\xBB" "\xBF") == 0)
                     {
                         s = s.substr(3);
@@ -466,7 +466,7 @@ namespace CommandsImpl {
                 && it->next())
         {
             it = it->next();
-            printf("Marking: %d %s\n", idx, it->text().c_str());
+            //printf("Marking: %d %s\n", idx, it->text().c_str());
         }
         g_state.registers[tail[0]] = it;
     }
@@ -634,16 +634,19 @@ namespace CommandsImpl {
         auto beforeDelete = it->Copy();
         it = it->next();
         idx = r.second - r.first + 1;
-        while(idx-- > 1) {
-            ++linesDeleted;
+        while(idx-- > 0) {
             for(auto kv = g_state.registers.begin(); kv != g_state.registers.end(); ++kv) {
                 if(kv->second
                         && kv->second == it)
                 {
+                    //printf("marking %c to erase\n", kv->first);
                     toErase[kv->first - 'a'] = true;
                 }
             }
-            it = it->next();
+            if(idx > 0) {
+                ++linesDeleted;
+                it = it->next();
+            }
         }
         auto empty = LinePtr();
         auto beforeContinue = (it) ? it->Copy() : empty;
@@ -755,7 +758,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
 
 void exit_usage(char* msg, char* argv0)
 {
-    printf("%s\n", msg);
+    fprintf(stderr, "%s\n", msg);
     fprintf(stderr, "Usage: %s FILE\nIf FILE begins with a bang, it will be executed as a command\n", argv0);
     exit(1);
 }
@@ -852,7 +855,7 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     auto it = g_state.swapfile.head();
     size_t index = 0;
     while(it != found->second && it) {
-        printf("%zd [%s]\n", index+1,it->text().c_str());
+        //printf("%zd [%s]\n", index+1,it->text().c_str());
         it = it->next();
         ++index;
     }
@@ -958,7 +961,7 @@ void Loop()
         // (especially in the case where the person was mid-sentence)
         if(ctrlc/*acq*/ && ISATTY(fileno(stdin))) {
             FlushConsoleInputBuffer(TheConsoleStdin);
-            printf("\n");
+            fprintf(stdout, "\n");
         }
         // Brutally set ctrlc to false since everything that needed
         // to be handled was. In case someone was spamming ^C,
@@ -966,7 +969,7 @@ void Loop()
         // A.K.A. I heard you the first time.
         ctrlc = false; /*rel*/
         if(ISATTY(fileno(stdin)) && ISATTY(fileno(stdout)) && g_state.showPrompt) {
-            printf("%s", g_state.PROMPT.c_str());
+            fprintf(stdout, "%s", g_state.PROMPT.c_str());
             fflush(stdout);
         }
 

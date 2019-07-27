@@ -65,7 +65,7 @@ struct ILine
 inline bool LinePtr::operator==(LinePtr const& right) const
 {
     auto left = *this;
-    printf("operator==, existance %p %p\n", (*this).operator->(), right.operator->());
+    //printf("operator==, existance %p %p\n", (*this).operator->(), right.operator->());
     if(left && right) return (*left) == (*right);
     if(!left && !right) return true;
     return false;
