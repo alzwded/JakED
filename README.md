@@ -1,6 +1,6 @@
 # JakED
 
-WIP: nonconformant clone of `man 1 ed`
+**WIP**: nonconformant clone of `man 1 ed` for Windows which actually *will* work~~s~~.
 
 See [TODO](doc/TODO.md) for current status.
 
@@ -46,6 +46,8 @@ The last stage of `nmake test` is MSVC's built-in static code analysis. This is 
 ## Building
 
 The only command you need is `nmake jaked.exe`. It's a stand-alone executable.
+
+JakED is written in C++17 (due to if constexpr, I guess?) so you should use MSVC++15 (aka VS 2017). Obviously it only runs on Windows.
 
 ## License?
 
