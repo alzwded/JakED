@@ -131,3 +131,4 @@ Internals, Externals and Other Tasks
 + [ ] test the `waiting` state in FileImpl::readLines
 + [ ] rewrite swap file to be a giant linked list + a bunch of registers
 + [ ] command line flag for no swap file and env var to set swap file default directory
++ [ ] don't crash if file can't be read

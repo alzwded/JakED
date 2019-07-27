@@ -285,9 +285,10 @@ public:
         std::unique_ptr<FileImpl> temp((FileImpl*)FileImpl::Create());
         cprintf<CPK::swap>("Relinking text\n");
         LinePtr prev = temp->head();
-        for(; l; l = l->next()) {
+        for(l = l->next(); l; l = l->next()) {
             auto inserted = temp->line(l->text());
             prev->link(inserted);
+            prev = inserted;
         }
         bool overlapTempCut = false;
         prev.reset();

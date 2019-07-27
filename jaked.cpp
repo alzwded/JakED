@@ -48,7 +48,14 @@ HANDLE TheConsoleStdin = NULL;
 // have been updated by the other thread. Assigning it back is a straight
 // forward way to release it, despite shennanigans going on in the CPU
 // cache line or w/e
-std::atomic<bool> ctrlc = false;
+volatile std::atomic<bool> ctrlc = false;
+volatile std::atomic<bool> ctrlint = false;
+inline bool CtrlC()
+{
+    return (ctrlc = ctrlc.load())
+        || (ctrlint = ctrlint.load());
+}
+
 struct GState {
     std::string filename;
     int line;
@@ -128,11 +135,11 @@ struct GState {
 
 } g_state;
 
+static int lastWasD = 0;
+static char lastChar = '\0';
 int Interactive_readCharFn()
 // WOW, this is a long story...
 {
-    static int lastWasD = 0;
-    static char lastChar = '\0';
     if(lastWasD == 2) {
         lastWasD = 0;
         return lastChar;
@@ -158,26 +165,30 @@ int Interactive_readCharFn()
         // This and ReadFileA are those functions which
         // actually get an ERROR_OPERATION_ABORTED error
         // if they are interrupted (as defined for ^C and ^BRK)
+        cprintf<CPK::CTRLC2>("reading\n");
         auto success = ReadConsoleA(
                 TheConsoleStdin,
                 &c,
                 1,
                 &rv,
                 NULL);
+        cprintf<CPK::CTRLC2>("rv %lu c %d\n", rv, c);
         cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
         // You can probably guess success == true and rv = 0,
         // but w/e. If that happened...
         if(GetLastError() == ERROR_OPERATION_ABORTED) {
             lastWasD = 0;
+            lastChar = (char)0;
             // Clear GetLastError() because as we know nobody
             // ever does.
             SetLastError(0);
             // And try to LOCK CMPXCHG to true since it is
             // entirely unpredictable if the consoleHandler
             // Thread or the main Thread get here first.
-            bool falsy = false;
-            //Sleep(1);
-            ctrlc.compare_exchange_strong(falsy, true);
+            ctrlint = true;
+        }
+        if(GetLastError() != 0) {
+            cprintf<CPK::CTRLC2>("GLE: %lu\n", GetLastError());
         }
         // In the event that ReadConsoleA fails (I never saw it fail yet)
         // then report some error and exit.
@@ -200,6 +211,7 @@ int Interactive_readCharFn()
         // OF COURSE we're on windows and <CR> == [0xD, 0xA]
         // Let's pretend we're always ignoring that character.
         if(c == (char)13) {
+            cprintf<CPK::CTRLC2>("char 13\n");
             lastWasD = true;
             continue;
         }
@@ -207,7 +219,7 @@ int Interactive_readCharFn()
         cprintf<CPK::CTRLC>("    read a %x\n", c);
         // Okay, if ctrlc is triggered, return some BS character.
         // The caller will handle the flag.
-        if(ctrlc = ctrlc.load()) {
+        if(CtrlC()) {
             cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
             return '\0';
         }
@@ -290,6 +302,11 @@ namespace CommandsImpl {
             throw std::runtime_error("shell execution is not implemented");
         }
         FILE* f = fopen(tail.c_str(), "r");
+        struct AtEnd {
+            FILE* f;
+            AtEnd(FILE*& ff) : f(ff) {}
+            ~AtEnd() { fclose(f); }
+        } atEnd(f);
         if(f) {
             int originalNlines = g_state.nlines;
             auto after = g_state.swapfile.head();
@@ -297,6 +314,11 @@ namespace CommandsImpl {
                     && after->next())
             {
                 after = after->next();
+                if(CtrlC()) {
+                    cprintf<CPK::CTRLC>("r: ctrlc invoked while skipping\n");
+                    cprintf<CPK::r>("r: ctrlc invoked while skipping\n");
+                    return;
+                }
             }
             std::stringstream line;
             int c;
@@ -305,6 +327,12 @@ namespace CommandsImpl {
             auto continueFrom = after->next();
             cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (after->text().c_str()) : "<EOF>", (continueFrom) ? continueFrom->text().c_str() : "<EOF>");
             while(!feof(f) && (c = fgetc(f)) != EOF) {
+                if(CtrlC()) {
+                    cprintf<CPK::CTRLC>("r: ctrlc invoked while reading\n");
+                    cprintf<CPK::r>("r: ctrlc invoked while reading\n");
+                    after->link(continueFrom);
+                    return;
+                }
                 ++bytes;
                 if(c == '\n') {
                     auto s = line.str();
@@ -337,14 +365,14 @@ namespace CommandsImpl {
             cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (continueFrom) ? (continueFrom->text().c_str()) : "<EOF>");
             fclose(f);
             g_state.dirty = true;
-            g_state.line = g_state.nlines;
+            g_state.line = range.second + g_state.nlines - originalNlines;
             {
                 std::stringstream output;
                 output << bytes << std::endl;
                 g_state.writeStringFn(output.str());
             }
             std::stringstream undoCommandBuf;
-            undoCommandBuf << range.second + 1 << "," << (g_state.nlines - originalNlines) << "d";
+            undoCommandBuf << range.second + 1 << "," << (range.second + g_state.nlines - originalNlines) << "d";
             auto undoCommand = g_state.swapfile.line(undoCommandBuf.str());
             g_state.swapfile.undo(undoCommand);
             cprintf<CPK::r>("r: n after = %zd, line = %d\n", g_state.nlines, g_state.line);
@@ -434,7 +462,7 @@ namespace CommandsImpl {
             ss << i->text() << std::endl;
             i = i->next();
             g_state.writeStringFn(ss.str());
-            if(ctrlc = ctrlc.load()) return;
+            if(CtrlC()) return;
         }
         g_state.line = r.second;
     }
@@ -578,7 +606,7 @@ namespace CommandsImpl {
             char c = g_state.readCharFn();
             cprintf<CPK::a>("read a %x %c\n", c, c);
             cprintf<CPK::a>("ss = %s\n", ss.str().c_str());
-            if(ctrlc = ctrlc.load()) return;
+            if(CtrlC()) return;
             if(c == '\n') {
                 if(ss.str() == ".") {
                     cprintf<CPK::a>("broke at .\n");
@@ -962,15 +990,17 @@ void Loop()
         // If we're on an actual terminal, throw a line-feed
         // in there to make it obvious the command got cancelled
         // (especially in the case where the person was mid-sentence)
-        if(ctrlc/*acq*/ && ISATTY(fileno(stdin))) {
+        if(CtrlC() && ISATTY(fileno(stdin))) {
+            bool truthy = true;
+            while(!ctrlc.load());
+            ctrlc = false;
+            cprintf<CPK::CTRLC2>("flushing\n");
             FlushConsoleInputBuffer(TheConsoleStdin);
+            lastWasD = false;
+            lastChar = (char)0;
             fprintf(stdout, "\n");
         }
-        // Brutally set ctrlc to false since everything that needed
-        // to be handled was. In case someone was spamming ^C,
-        // w/e, that's a weird edge case I don't care about.
-        // A.K.A. I heard you the first time.
-        ctrlc = false; /*rel*/
+        ctrlint = false;
         if(ISATTY(fileno(stdin)) && ISATTY(fileno(stdout)) && g_state.showPrompt) {
             fprintf(stdout, "%s", g_state.PROMPT.c_str());
             fflush(stdout);
@@ -987,7 +1017,7 @@ void Loop()
                     cprintf<CPK::CTRLC>("ii%d\n", ii);
                     char c = (char)(ii & 0xFF);
                     // If we got interrupted, clear the line buffer
-                    if(ctrlc = ctrlc.load()) {
+                    if(CtrlC()) {
                         cprintf<CPK::CTRLC>("interrupted after reading ii\n");
                         ss.str("");
                         break;
@@ -997,7 +1027,7 @@ void Loop()
                     ss << c;
                 }
                 // If we got interrupted, start a new loop
-                if(ctrlc = ctrlc.load()) break;
+                if(CtrlC()) break;
                 cprintf<CPK::CTRLC>("Interrupted after read loop\n");
                 auto s = ss.str();
 
@@ -1009,7 +1039,7 @@ void Loop()
                     cprintf<CPK::CTRLC>("parsed command\n");
                 }
                 // If we got interrupted, start a new loop
-                if(ctrlc = ctrlc.load()) break;
+                if(CtrlC()) break;
                 cprintf<CPK::CTRLC>("Will execute %c\n", command);
                 Commands.at(command)(r, tail);
                 g_state.diagnostic = "";
@@ -1039,7 +1069,7 @@ BOOL consoleHandler(DWORD signal)
             // Use LOCK CMPXCHG because it's a race between
             // whatever thread this is and the main thread.
             // I don't know why, ask Windows...
-            //ctrlc.compare_exchange_strong(falsy, true);
+            ctrlc = true;
             return TRUE;
         default:
             return FALSE;

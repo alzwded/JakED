@@ -250,6 +250,43 @@ p
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(RSetsDotCorrectly) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\twolines.txt
+1r test\twolines.txt
+.=
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: break;
+                    case 2: break;
+                    case 3: ASSERT(s == "3\n"); break;
+                    default:
+                        fprintf(stderr, "Unexpected string: %s", s.c_str());
+                        fprintf(stderr, "Read %d already\n", *numLinesRead);
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 3);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
         DEF_TEST(RAppendsAtTheEndByDefault) {
             auto numLinesRead = std::make_shared<int>(0);
             TEST_SETUP() {
