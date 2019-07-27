@@ -4,7 +4,7 @@
             auto after = g_state.swapfile.head();
             for(size_t i = 0; i < 10; ++i) {
                 std::stringstream ss;
-                ss << "Line " << i;
+                ss << "Line " << i + 1;
                 auto line = g_state.swapfile.line(ss.str());
                 after->link(line);
                 after = line;
