@@ -29,7 +29,7 @@ In C format:
 
     struct Header
     {
-        Line[1] head = { &data[?], 0 };
+        struct Line head[1] = { &data[?], 0 };
         struct Line* cut;
         struct Line* undo;
         struct Line[?] data;
