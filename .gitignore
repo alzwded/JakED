@@ -1,4 +1,5 @@
 *.exe
+cprintf.h
 *.out
 *.o
 *.obj

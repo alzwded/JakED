@@ -13,7 +13,7 @@
 #include <windows.h>
 #include <io.h>
 
-#undef DEBUG_SWAPFILE
+#include "cprintf.h"
 
 class FileImpl;
 class FileLine : public ILine
@@ -38,7 +38,7 @@ public:
     {
         auto pp = dynamic_cast<FileLine const*>(&other);
         if(!pp) return false;
-        //printf("FileLine== %zd %zd\n", m_pos, pp->m_pos);
+        cprintf<CPK::swap>("FileLine== %zd %zd\n", m_pos, pp->m_pos);
         if(m_file != pp->m_file) return false;
         if(m_pos != pp->m_pos) return false;
         return true;
@@ -55,6 +55,7 @@ public:
         fsetpos(m_file, &offset);
         uint16_t len = 0;
         fread(&len, 2, 1, m_file);
+        cprintf<CPK::swap>("[%p] Read length %d from %I64d\n", m_file, len, m_pos);
         return len;
     }
 
@@ -67,6 +68,7 @@ public:
         std::string rval(len, '\0');
         offset = m_pos + offsetof(LineFormat, text);
         fsetpos(m_file, &offset);
+        cprintf<CPK::swap>("[%p] Read %d chars from %I64d\n", m_file, len, m_pos);
         fread(rval.data(), 1, len, m_file);
         return rval;
     }
@@ -77,6 +79,7 @@ public:
         fsetpos(m_file, &offset);
         uint64_t nextPos = 0;
         fread(&nextPos, sizeof(uint64_t), 1, m_file);
+        cprintf<CPK::swap>("[%p] next: %I64d -> %I64d\n", m_file, m_pos, nextPos);
         if(nextPos == 0) return {};
         return std::make_shared<FileLine>(m_file, nextPos);
     }
@@ -87,6 +90,7 @@ public:
         fpos_t offset = m_pos + offsetof(LineFormat, next);
         fsetpos(m_file, &offset);
         uint64_t nextPos = (pp) ? pp->m_pos : 0;
+        cprintf<CPK::swap>("[%p] link: %I64d -> %I64d\n", m_file, m_pos, nextPos);
         fwrite(&nextPos, sizeof(uint64_t), 1, m_file);
     }
 
@@ -120,6 +124,7 @@ class FileImpl : public ISwapImpl
         LPCSTR lpPath = tempDir, lpPrefix = "jed";
         DWORD uUnique = 0;
         if(GetTempFileNameA(lpPath, lpPrefix, uUnique, lpTempFileName)) {
+            cprintf<CPK::swap>("Computed temp file: %s\n", lpTempFileName);
             return lpTempFileName;
         }
         return "";
@@ -131,6 +136,7 @@ class FileImpl : public ISwapImpl
         LPCSTR lpPath = ".", lpPrefix = "jed";
         DWORD uUnique = 0;
         if(GetTempFileNameA(lpPath, lpPrefix, uUnique, lpTempFileName)) {
+            cprintf<CPK::swap>("Computed temp file: %s\n", lpTempFileName);
             return lpTempFileName;
         }
         return "";
@@ -157,6 +163,7 @@ public:
         if(f) {
             fseek(f, 0, SEEK_SET);
             if(1 == fwrite(&head, sizeof(Header), 1, f)) {
+                cprintf<CPK::swap>("Will use tmpfile() [%p]\n", f);
                 return new FileImpl(f, "");
             }
         }
@@ -171,10 +178,12 @@ public:
             if(f) {
                 fseek(f, 0, SEEK_SET);
                 if(1 == fwrite(&head, sizeof(Header), 1, f)) {
+                    cprintf<CPK::swap>("--> will use this one [%p]\n", f);
                     return new FileImpl(f, name);
                 }
             }
         }
+        cprintf<CPK::swap>("Failed to create any temp file\n");
         return nullptr;
     }
 
@@ -196,6 +205,7 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
+        cprintf<CPK::swap>("[%p] Cut buffer points to %I64d\n", m_file, head.cut);
         return std::make_shared<FileLine>(m_file, head.cut);
     }
 
@@ -206,6 +216,7 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
+        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", m_file, head.undo);
         return std::make_shared<FileLine>(m_file, head.undo);
     }
 
@@ -216,11 +227,13 @@ public:
         memset(&fp, 0, sizeof(fp));
         fgetpos(m_file, &fp);
 
+        cprintf<CPK::swap>("[%p] Adding line to %I64d\n", m_file, fp);
         uint64_t zero = 0;
         fwrite(&zero, sizeof(uint64_t), 1, m_file);
         uint16_t len = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
         fwrite(&len, sizeof(uint16_t), 1, m_file);
         fwrite(s.data(), 1, len, m_file);
+        cprintf<CPK::swap>("--> wrote %d chars\n", len);
 
         return std::make_shared<FileLine>(m_file, fp);
     }
@@ -234,9 +247,12 @@ public:
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
 
+        cprintf<CPK::swap>("[%p] Cut buffer was %I64d\n", m_file, head.cut);
+
         head.cut = (pp) ? pp->m_pos : 0;
         fseek(m_file, 0, SEEK_SET);
         fwrite(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("--> set cut buffer to %I64d\n", head.cut);
 
         return p;
     }
@@ -249,21 +265,25 @@ public:
         Header head;
         memset(&head, 0, sizeof(Header));
         fread(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head.undo);
 
         head.undo = pp->m_pos;
         fseek(m_file, 0, SEEK_SET);
         fwrite(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head.undo);
 
         return p;
     }
 
     void Rebuild() override
     {
+        cprintf<CPK::swap>("[%p] Rebuilding swap file\n", m_file);
         auto cutBuffer = this->cut();
         auto undoBuffer = this->undo();
         auto l = this->head();
 
         std::unique_ptr<FileImpl> temp((FileImpl*)FileImpl::Create());
+        cprintf<CPK::swap>("Relinking text\n");
         LinePtr prev = temp->head();
         for(; l; l = l->next()) {
             auto inserted = temp->line(l->text());
@@ -271,11 +291,13 @@ public:
         }
         bool overlapTempCut = false;
         prev.reset();
+        cprintf<CPK::swap>("Writing undo buffer\n");
         for(; undoBuffer; undoBuffer = undoBuffer->next()) {
             auto inserted = temp->line(undoBuffer->text());
             if(undoBuffer == cutBuffer) {
                 temp->cut(inserted);
                 overlapTempCut = true;
+                cprintf<CPK::swap>("Detected overlap between undo and cut buffers\n");
             }
             if(prev) prev->link(inserted);
             else {
@@ -284,6 +306,7 @@ public:
             }
         }
         if(!overlapTempCut) {
+            cprintf<CPK::swap>("Writing cut buffer\n");
             prev.reset();
             for(; cutBuffer; cutBuffer = cutBuffer->next()) {
                 auto inserted = temp->line(cutBuffer->text());

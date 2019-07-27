@@ -34,8 +34,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 # define ISATTY(X) _isatty(X)
 #endif
 
-#define JAKED_DEBUG_CTRL_C
-#undef JAKED_DEBUG_CTRL_C
+#include "cprintf.h"
 
 HANDLE TheConsoleStdin = NULL;
 
@@ -140,9 +139,7 @@ int Interactive_readCharFn()
     }
     // So, if there is no STDIN, just return EOF
     if(feof(stdin)) {
-#ifdef JAKED_DEBUG_CTRL_C
-        fprintf(stderr, "stdin was closed somehow\n");
-#endif
+        cprintf<CPK::CTRLC>("stdin was closed somehow\n");
         return EOF;
     }
     // Next, if we're not connected to a terminal,
@@ -167,7 +164,7 @@ int Interactive_readCharFn()
                 1,
                 &rv,
                 NULL);
-        //printf("rv %d c %d\n", rv, c);
+        cprintf<CPK::CTRLC>("rv %d c %d\n", rv, c);
         // You can probably guess success == true and rv = 0,
         // but w/e. If that happened...
         if(GetLastError() == ERROR_OPERATION_ABORTED) {
@@ -207,27 +204,19 @@ int Interactive_readCharFn()
             continue;
         }
 
-#ifdef JAKED_DEBUG_CTRL_C
-        fprintf(stderr, "    read a %x\n", c);
-#endif
+        cprintf<CPK::CTRLC>("    read a %x\n", c);
         // Okay, if ctrlc is triggered, return some BS character.
         // The caller will handle the flag.
         if(ctrlc = ctrlc.load()) {
-#ifdef JAKED_DEBUG_CTRL_C
-            fprintf(stderr, "from ctrlc, returning NUL\n");
-#endif
+            cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n", c);
             return '\0';
         }
         // If STDIN got closed, return EOF.
         if(feof(stdin)) {
-#ifdef JAKED_DEBUG_CTRL_C
-            fprintf(stderr, "lost stdin!!! my magic didn't work\n");
-#endif
+            cprintf<CPK::CTRLC>("lost stdin!!! my magic didn't work\n");
             return EOF;
         }
-#ifdef JAKED_DEBUG_CTRL_C
-        fprintf(stderr, "read %c\n", c);
-#endif
+        cprintf<CPK::CTRLC>("read %c\n", c);
         // Finally, return the character
         return c;
     } while(1);
@@ -291,6 +280,7 @@ std::tuple<int, int> ReadNumber(std::string const&, int);
 namespace CommandsImpl {
     void r(Range range, std::string tail)
     {
+        cprintf<CPK::r>("r: n before = %zd\n", g_state.nlines);
         int nthLine = range.second;
         tail = tail.substr(SkipWS(tail, 0));
         if(tail.empty()) tail = g_state.filename;
@@ -311,7 +301,9 @@ namespace CommandsImpl {
             std::stringstream line;
             int c;
             bool bomChecked = false;
-            g_state.nlines = 0;
+            //g_state.nlines = 0;
+            auto continueFrom = after->next();
+            cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (after->text().c_str()) : "<EOF>", (continueFrom) ? continueFrom->text().c_str() : "<EOF>");
             while(!feof(f) && (c = fgetc(f)) != EOF) {
                 ++bytes;
                 if(c == '\n') {
@@ -324,10 +316,11 @@ namespace CommandsImpl {
                         bomChecked = true;
                     }
                     auto inserted = g_state.swapfile.line(s);
+                    cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (inserted->text().c_str()));
                     after->link(inserted);
                     after = inserted;
                     ++g_state.nlines;
-                    //printf("> %s\n", line.str().c_str()); // FIXME some utf8 doesn't get right for some reason; might be utf16
+                    cprintf<CPK::r>("> %s\n", line.str().c_str()); // FIXME some utf8 doesn't get right for some reason; might be utf16
                     line.str(std::string());
                 } else {
                     line << (char)(c & 0xFF);
@@ -337,8 +330,11 @@ namespace CommandsImpl {
                 auto inserted = g_state.swapfile.line(line.str());
                 after->link(inserted);
                 after = inserted;
+                cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (inserted->text().c_str()));
                 ++g_state.nlines;
             }
+            after->link(continueFrom);
+            cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (continueFrom) ? (continueFrom->text().c_str()) : "<EOF>");
             fclose(f);
             g_state.dirty = true;
             g_state.line = g_state.nlines;
@@ -351,7 +347,7 @@ namespace CommandsImpl {
             undoCommandBuf << range.second + 1 << "," << (g_state.nlines - originalNlines) << "d";
             auto undoCommand = g_state.swapfile.line(undoCommandBuf.str());
             g_state.swapfile.undo(undoCommand);
-            //printf("%zd %d", g_state.nlines, g_state.line);
+            cprintf<CPK::r>("r: n after = %zd, line = %d\n", g_state.nlines, g_state.line);
         } else {
             throw std::runtime_error("No such file!");
         }
@@ -409,7 +405,7 @@ namespace CommandsImpl {
 
     void Q(Range r, std::string tail)
     {
-        //printf("in Q %d\n", g_state.error);
+        cprintf<CPK::Q>("in Q %d\n", g_state.error);
 #ifdef JAKED_TEST
         throw application_exit(g_state.error);
 #endif
@@ -497,6 +493,7 @@ namespace CommandsImpl {
 
     void commonW(Range r, std::string fname, const char* mode)
     {
+        cprintf<CPK::W>("R: [%d, %d]\n", r.first, r.second);
         if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw std::runtime_error("Invalid range");
         fname = getFileName(fname);
         FILE* f;
@@ -511,8 +508,13 @@ namespace CommandsImpl {
 
         auto i1 = g_state.swapfile.head();
         auto first = r.first, second = r.second;
-        while(first-- > 0) i1 = i1->next();
+        while(first-- > 0) {
+            cprintf<CPK::W>("skipping %s\n", (i1) ? i1->text().c_str() : "<EOF>");
+            i1 = i1->next();
+        }
+        if(i1) cprintf<CPK::W>("Writing from %s\n", i1->text().c_str());
         while(second-- > 0 && i1) {
+            if(i1) cprintf<CPK::W>("Writing %s\n", i1->text().c_str());
             nBytes += i1->length() + strlen("\n");
             fprintf(f, "%s\n", i1->text().c_str());
             i1 = i1->next();
@@ -574,15 +576,15 @@ namespace CommandsImpl {
         std::stringstream ss;
         while(1) {
             char c = g_state.readCharFn();
-            //printf("read a %x %c\n", c, c);
-            //printf("ss = %s\n", ss.str().c_str());
+            cprintf<CPK::a>("read a %x %c\n", c, c);
+            cprintf<CPK::a>("ss = %s\n", ss.str().c_str());
             if(ctrlc = ctrlc.load()) return;
             if(c == '\n') {
                 if(ss.str() == ".") {
-                    //printf("broke at .\n");
+                    cprintf<CPK::a>("broke at .\n");
                     break;
                 }
-                //printf("pushing line\n");
+                cprintf<CPK::a>("pushing line\n");
                 nLines++;
                 auto inserted = g_state.swapfile.line(ss.str());
                 after->link(inserted);
@@ -591,7 +593,7 @@ namespace CommandsImpl {
                 ss.str("");
                 continue;
             }
-            //printf("pushing char\n");
+            cprintf<CPK::a>("pushing char\n");
             ss << c;
         }
         if(nLines) {
@@ -639,7 +641,8 @@ namespace CommandsImpl {
                 if(kv->second
                         && kv->second == it)
                 {
-                    //printf("marking %c to erase\n", kv->first);
+                    cprintf<CPK::regs>("marking %c to erase\n", kv->first);
+                    cprintf<CPK::d>("marking %c to erase\n", kv->first);
                     toErase[kv->first - 'a'] = true;
                 }
             }
@@ -666,7 +669,8 @@ namespace CommandsImpl {
 
         for(char c = 'a'; c != 'z'; ++c) {
             if(toErase[c - 'a']) {
-                //printf("erasing r%c\n", c);
+                cprintf<CPK::regs>("erasing r%c\n", c);
+                cprintf<CPK::a>("erasing r%c\n", c);
                 g_state.registers.erase(g_state.registers.find(c));
             }
         }
@@ -689,7 +693,7 @@ namespace CommandsImpl {
         auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
         std::stringstream ss;
         while(oldLines) {
-            //printf("%s\n", oldLines->text().c_str());
+            cprintf<CPK::j>("%s\n", oldLines->text().c_str());
             ss << oldLines->text();
             if(oldLines->next()) ss << tail;
             oldLines = oldLines->next();
@@ -704,7 +708,7 @@ namespace CommandsImpl {
         }
         newLine->link( (it) ? it->next() : it );
         it->link(newLine);
-        //printf("   inserting %s before %d\n", ss.str().c_str(), r.first);
+        cprintf<CPK::j>("   inserting %s before %d\n", ss.str().c_str(), r.first);
         g_state.line = r.first;
 
         ss.str("");
@@ -855,7 +859,8 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     auto it = g_state.swapfile.head();
     size_t index = 0;
     while(it != found->second && it) {
-        //printf("%zd [%s]\n", index+1,it->text().c_str());
+        cprintf<CPK::regs>("%zd [%s]\n", index+1,it->text().c_str());
+        cprintf<CPK::parser>("%zd [%s]\n", index+1,it->text().c_str());
         it = it->next();
         ++index;
     }
@@ -939,7 +944,7 @@ void ErrorOccurred(std::exception& ex)
 {
     g_state.error = true;
     g_state.diagnostic = ex.what();
-    //printf("%s\n", ex.what());
+    cprintf<CPK::error>("%s\n", ex.what());
     if(g_state.Hmode) {
         std::stringstream ss;
         ss << g_state.diagnostic << std::endl;
@@ -953,9 +958,7 @@ void ErrorOccurred(std::exception& ex)
 void Loop()
 {
     while(1) {
-#ifdef JAKED_DEBUG_CTRL_C
-        fprintf(stderr, "resetting ctrlc\n");
-#endif
+        cprintf<CPK::CTRLC>("resetting ctrlc\n");
         // If we're on an actual terminal, throw a line-feed
         // in there to make it obvious the command got cancelled
         // (especially in the case where the person was mid-sentence)
@@ -981,45 +984,33 @@ void Loop()
                 std::stringstream ss;
                 int ii = 0;
                 while((ii = g_state.readCharFn()) != EOF) {
-#ifdef JAKED_DEBUG_CTRL_C
-                    fprintf(stderr, "ii%d\n", ii);
-#endif
+                    cprintf<CPK::CTRLC>("ii%d\n", ii);
                     char c = (char)(ii & 0xFF);
                     // If we got interrupted, clear the line buffer
                     if(ctrlc = ctrlc.load()) {
-#ifdef JAKED_DEBUG_CTRL_C
-                        fprintf(stderr, "qwe\n");
-#endif
+                        cprintf<CPK::CTRLC>("interrupted after reading ii\n");
                         ss.str("");
                         break;
                     }
-                    //printf("Read %x\n", c);
+                    cprintf<CPK::parser>("Read %x\n", c);
                     if(c == '\n') break;
                     ss << c;
                 }
                 // If we got interrupted, start a new loop
                 if(ctrlc = ctrlc.load()) break;
-#ifdef JAKED_DEBUG_CTRL_C
-                        printf("ftw\n");
-#endif
+                cprintf<CPK::CTRLC>("Interrupted after read loop\n");
                 auto s = ss.str();
 
                 if( ii == EOF && s.empty()) {
-#ifdef JAKED_DEBUG_CTRL_C
-                        fprintf(stderr, "s is empty\n");
-#endif
+                    cprintf<CPK::CTRLC>("s is empty\n");
                     command = 'Q';
                 } else {
                     std::tie(r, command, tail) = ParseCommand(s);
-#ifdef JAKED_DEBUG_CTRL_C
-                        fprintf(stderr, "parsed command\n");
-#endif
+                    cprintf<CPK::CTRLC>("parsed command\n");
                 }
                 // If we got interrupted, start a new loop
                 if(ctrlc = ctrlc.load()) break;
-#ifdef JAKED_DEBUG_CTRL_C
-                fprintf(stderr, "Will execute %c\n", command);
-#endif
+                cprintf<CPK::CTRLC>("Will execute %c\n", command);
                 Commands.at(command)(r, tail);
                 g_state.diagnostic = "";
             } while(0);
@@ -1042,7 +1033,7 @@ BOOL consoleHandler(DWORD signal)
 {
     bool falsy = false;
     switch(signal) {
-        case CTRL_CLOSE_EVENT: printf("a\n");
+        case CTRL_CLOSE_EVENT: cprintf<CPK::CTRLC>("a\n");
         case CTRL_BREAK_EVENT:
         case CTRL_C_EVENT:
             // Use LOCK CMPXCHG because it's a race between
