@@ -80,9 +80,9 @@ Commands
 *Cut buffer, register update*:
 
 + [x] cut buffer
-+ [/] swap file: see [design document](UndoAndSwapFile.md)
-  * [/] On w/W, buffer is cleared and re-initialized with current cut buffer
-  * [/] if no I/O can be performed at all, keep everything in a giant stringstream
++ [x] swap file: see [design document](UndoAndSwapFile.md)
+  * [x] On w/W, buffer is cleared and re-initialized with current cut buffer
+  * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [x] on clean exit, delete file
 
 + [x] .,.c
@@ -105,6 +105,7 @@ I/O
 + [x] Q
 + [ ] ^V literal input
 + [x] handle `CTRL_C` and `CTRL_BRK` elegantly
++ [ ] dump swapfile to a readable file if console's closed; or call `_exit` which theoretically won't purge the tmp file? or was that `__exit`? or `_quick_exit`? meh
 
 *Shell versions*:
 
@@ -116,7 +117,7 @@ I/O
 Internals, Externals and Other Tasks
 ------------------------------------
 
-+ [ ] refactor string processing
++ [x] refactor string processing – done, implemented swapfile.
 + [x] scripting behaviour (cancel on error if !isatty)
 + [/] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM
@@ -127,8 +128,8 @@ Internals, Externals and Other Tasks
 + [ ] jaked --version
 + [ ] some nice html documentation, like `ed`'s man page
 + [ ] read windows-native UTF16 files (`rutf16 somefile?`)
-+ [ ] large file support (i.e. use getfpos and setfpos and update header to be 64bit)
-+ [ ] test the `waiting` state in FileImpl::readLines
++ [x] large file support (i.e. use getfpos and setfpos and update header to be 64bit) – it's sort-of there, but uses a whole lotta disk space
+  * [ ] command line flag for no swap file and env var to set swap file default directory
 + [ ] rewrite swap file to be a giant linked list + a bunch of registers
-+ [ ] command line flag for no swap file and env var to set swap file default directory
 + [ ] don't crash if file can't be read
++ [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long

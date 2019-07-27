@@ -824,3 +824,42 @@ Q
                 ASSERT( (*numLinesRead) == 2);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(aLeavesTheCorrectNumberOfLinesAfterwards) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(1,$d
+a
+Line 1
+.
+=
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: ASSERT(s == "1\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(g_state.dirty);
+                ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();

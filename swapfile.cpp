@@ -1,3 +1,15 @@
+/*
+Copyright 2019 Vlad Meșco
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "swapfile.h"
 
 #include <vector>
@@ -20,12 +32,14 @@ class FileLine : public ILine
 {
     friend class FileImpl;
     FILE* const m_file;
+    // technically, this is not supported; we'll regroup if/when these asserts fail
     static_assert(std::is_convertible<fpos_t, int64_t>::value, "fpos_t is not convertible to int64_t");
     static_assert(std::is_convertible<int64_t, fpos_t>::value, "fpos_t is not convertible to int64_t");
     static_assert(sizeof(fpos_t) <= sizeof(int64_t), "fpos_t is not convertible to int64_t");
     int64_t m_pos;
 public:
 #   pragma pack(push, 1)
+    // I don't like counting, this let's me use offsetof()
     struct LineFormat
     {
         int64_t next;
@@ -144,6 +158,7 @@ class FileImpl : public ISwapImpl
 
 public:
 #   pragma pack(push, 1)
+    // I don't like counting, this let's me use offsetof()
     struct Header
     {
         int64_t head;
@@ -336,6 +351,7 @@ public:
 
 class MemoryImpl : public FileImpl
 {
+    // TODO
 };
 
 struct NullImpl: public FileImpl

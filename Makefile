@@ -42,7 +42,7 @@ test: chrono.exe
 all: jaked.exe test
 
 cprintf_generate.exe: cprintf_generate.c
-	cl.exe /O2 /Of cprintf_generate.c
+	cl.exe /O2 /Ot cprintf_generate.c
 
 cprintf.h: cprintf_template.h cprintf_generate.exe Makefile
 	cprintf_generate $(CPRINTF_KEYS)

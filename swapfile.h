@@ -1,3 +1,14 @@
+/*
+Copyright 2019 Vlad Meșco
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 #ifndef JAKED_SWAPFILE_H
 #define JAKED_SWAPFILE_H
 
@@ -9,10 +20,10 @@
 
 /*
    file structure:
-   u64 pCut
-   u64 pUndo
    u64 pHead
    u16 padding
+   u64 pCut
+   u64 pUndo
    Line{*}
    --
 
@@ -21,18 +32,29 @@
        u16 sz
        char[sz] text
 
+   Example state:
+   26                           0               head -> Line 1
+   0x0000                       8               always 0
+   0                            10              NUL
+   0                            18              NUL
+   42 6 'Line 1'                26              Line 1 -> Line 2
+   58 6 'Line 2'                42              Line 2 -> Line 3
+   0  6 'Line 3'                58              Line 3 -> EOF
+                                EOF
+
+   Execute 2c\nReplace line 1\nReplace line 2\n.
 
    Example state:
-   42                           0
-   122                          8
-   26                           16
-   0x0000                       24
-   74 6 'Line 1'                26
-   0 6 'Line 2'                 42
-   0 ? Line 3                   58
-   98 14 'Replace line 1'       74
-   58 14 'Replace line 2'       98
-   42 4 '2,3c'                  122
+   26                           0               head -> Line 1
+   0x0000                       8               always 0
+   42                           10              cut -> Line 2
+   122                          18              undo -> 2,3c
+   74 6 'Line 1'                26              Line 1 -> Replaced line 1
+   0  6 'Line 2'                42              Line 2 -> EOF
+   0  6 'Line 3'                58              Line 3 -> EOF
+   98 14 'Replace line 1'       74              Rep...ine 1 -> R... line 2
+   58 14 'Replace line 2'       98              Rep...ine 2 -> EOF
+   42 4  '2,3c'                 122             2,3c -> Line 2
                                 EOF
 
    Summary: Started with a 3 line file

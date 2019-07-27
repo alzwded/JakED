@@ -4,16 +4,67 @@ Undo and the Swap File
 Swap file format:
 
 ```
-i32     cut_buffer_start
-u32     cut_buffer_len
-i32     undo_command_start
-u32     undo_command_len
-*       [uncommitted inserts]
-...
-[cut_buffer_start..+cut_buffer_len] text
-...
-[undo_command_start..+undo_command_len] script
+Swapfile:
+    i64     head
+    u16     padding, always 0
+    i64     cut
+    i64     undo
+    LE{*}   data
+
+LE:
+    i64     next
+    u16     sz
+    u8[sz]  text
 ```
+
+In C format:
+
+```C
+    struct Line
+    {
+        struct Line* next;
+        uint16_t sz;
+        char[sz] text;
+    };
+
+    struct Header
+    {
+        Line[1] head = { &data[?], 0 };
+        struct Line* cut;
+        struct Line* undo;
+        struct Line[?] data;
+    };
+```
+
+The Swapfile is made up primarily of `Line` structs, which make up
+at least one and at most three linked lists. Those lists are the "TEXT",
+"CUT" and "UNDO" lists.
+
+The base of the memory space contains three special registers:
+
++ `head`: is the head of the "TEXT" list. It is represented as a `List` struct with a size of 0 (thus rendering its `text` field non-existant) to simplify the C++ code that manipulates lines (something needs to be appenable even when there is nothing there yet; so may as well make that something look like a `Line`)
++ `cut`: points to the "CUT" list containing the cut buffer; this list used to be part of "TEXT"
++ `undo`: points to a special line containing an undo command. The undo command optionally points to a list of lines that were at one point part of "TEXT". The special command line may point to the "CUT" list, thus they can overlap.
+
+In C++ land, the Swapfile can perform a very small number of operations:
+
++ read the `head`, `cut` and `undo` registers, which return the head of their respective lists (if any in the case of the latter two)
++ set the `cut` and `undo` list heads
++ add a new, unlinked `Line` to the text
++ gc: this is called after the file is written. The goal is to reorder and compact the swap file. It effectively garbage collects disconnected lines via mark-and-sweep – so, obviously, try not to create loops.
+
+The Line object supports the following operations:
+
++ `next`: returns the successor element, or nothing if it's the end
++ `link`: sets the successor element
++ `text`: retrieves the associated `text` field
++ `length`: retrieves the associated `sz` field
+
+Lines are immutable because they are well packed in memory; memory management responsabilities are sort-of placed on the caller (even though you only have `new` and `gc`).
+
+All text manipulation commands use the Swapfile as storage, thus all manipulation commands use the above operations to achieve their goals.
+
+See an example in [`swapfile.h`](../swapfile.h).
 
 Undo behaviour per command
 --------------------------

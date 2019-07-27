@@ -38,16 +38,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 HANDLE TheConsoleStdin = NULL;
 
-// Note to self: if(ctrlc = ctrlc.load()) actually makes sure we end up seeing the value everywhere, otherwise it gets a random value in one of the threads
-// There are different memory models, e.g. acquire & release with some
-// strict rules thrown in there. I basically want a full memory barrier
-// around this flag (because it's easy and the only other thread ever
-// is the consoleHandler)
-// If one just if(ctrlc), the memory gets acquired, but since there's
-// no explicit release, our thread is left with that value, which should
-// have been updated by the other thread. Assigning it back is a straight
-// forward way to release it, despite shennanigans going on in the CPU
-// cache line or w/e
 volatile std::atomic<bool> ctrlc = false;
 volatile std::atomic<bool> ctrlint = false;
 inline bool CtrlC()
@@ -182,9 +172,9 @@ int Interactive_readCharFn()
             // Clear GetLastError() because as we know nobody
             // ever does.
             SetLastError(0);
-            // And try to LOCK CMPXCHG to true since it is
-            // entirely unpredictable if the consoleHandler
-            // Thread or the main Thread get here first.
+            // Set a different interrupt flag because otherwise we're
+            // randomly racing with the interrupt thread. We'll wait
+            // for the consoleHandler thread later.
             ctrlint = true;
         }
         if(GetLastError() != 0) {
@@ -592,6 +582,7 @@ namespace CommandsImpl {
 
     void a(Range r, std::string)
     {
+        cprintf<CPK::a>("line = %d, nlines = %zd\n", g_state.line, g_state.nlines);
         auto after = g_state.swapfile.head();
         auto idx = std::max(0, r.second);
         while(idx-- > 0
@@ -632,7 +623,6 @@ namespace CommandsImpl {
             ss << r.second + 1 << "," << (r.second + nLines) << "d";
             auto inserted = g_state.swapfile.line(ss.str());
             g_state.swapfile.undo(inserted);
-            g_state.nlines += nLines;
         }
     }
 
@@ -992,16 +982,20 @@ void Loop()
         // in there to make it obvious the command got cancelled
         // (especially in the case where the person was mid-sentence)
         if(CtrlC() && ISATTY(fileno(stdin))) {
-            bool truthy = true;
-            while(!ctrlc.load());
-            ctrlc = false;
             cprintf<CPK::CTRLC2>("flushing\n");
             FlushConsoleInputBuffer(TheConsoleStdin);
             lastWasD = false;
             lastChar = (char)0;
             fprintf(stdout, "\n");
         }
-        ctrlint = false;
+        if(CtrlC()) {
+            // wait for the interrupt thread; it will get here eventually
+            while(!ctrlc.load());
+            ctrlc = false;
+            // this one doesn't matter; this thread would set it, and
+            // obviously it cannot do that right now.
+            ctrlint = false;
+        }
         if(ISATTY(fileno(stdin)) && ISATTY(fileno(stdout)) && g_state.showPrompt) {
             fprintf(stdout, "%s", g_state.PROMPT.c_str());
             fflush(stdout);
