@@ -893,7 +893,7 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     return ParseCommaOrOffset(index, s, i);
 }
 
-std::tuple<Range, int> ParseRegex(std::string s, int i)
+std::tuple<int, int> ParseRegex(std::string s, int i)
 {
     if(s[0] != '/' && s[0] != '?') throw std::runtime_error("Internal parse error: expected regex to start with / or ?");
     ++i;
@@ -1012,7 +1012,7 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
         ref = ref->next();
         if(!ref) ref = g_state.swapfile.head()->next();
         if(CtrlC()) {
-            return std::make_tuple(Range::ZERO(), i);
+            throw std::runtime_error("Interrupted");
         }
     }
     cprintf<CPK::regex>("line %d == fromLine %d, text == %s\n", line, g_state.line, ref->text().c_str());
@@ -1030,7 +1030,7 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
             cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
             if(std::regex_search(it->text(), g_state.regexp)) {
                 cprintf<CPK::regex>("Found at %d\n", line);
-                return std::make_tuple(Range::S(line), i + 1);
+                return std::make_tuple(line, i + 1);
             }
             if(CtrlC()) {
                 break;
@@ -1068,7 +1068,7 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
         }
         if(lastFound == 0) throw std::runtime_error("Pattern not found");
         cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
-        return std::make_tuple(Range::S(lastFound), i + 1);
+        return std::make_tuple(lastFound, i + 1);
     }
 
     throw::std::runtime_error("internal error");
@@ -1100,11 +1100,8 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
             return ParseRegister(s, i);
         case '/':
         case '?':
-        {
-            Range r;
-            std::tie(r, i) = ParseRegex(s, i);
-            return ParseCommaOrOffset(r.second, s, i);
-        }
+            std::tie(left, i) = ParseRegex(s, i);
+            return ParseCommaOrOffset(left, s, i);
         default:
             return std::make_tuple(Range::S(Range::Dot()), i);
     }

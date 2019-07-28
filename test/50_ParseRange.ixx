@@ -359,11 +359,11 @@
             TEST_RUN() {
                 Range r;
                 int i = 0;
-                std::tie(r, i) = ParseRange("/./-,//+d", i);
+                std::tie(r, i) = ParseRange("/2/-,//+d", i);
                 printf("%d %d\n", r.first, r.second);
                 ASSERT(g_state.line == 1);
-                ASSERT(r.first == 1);
-                ASSERT(r.second == 3);
+                ASSERT(r.first == 2);
+                ASSERT(r.second == 4);
                 ASSERT(i == 8);
             } TEST_RUN_END();
         } END_TEST();

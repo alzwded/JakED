@@ -32,10 +32,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/aa/d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("/aa/d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 4);
                 ASSERT("/aa/d"[i] == 'd');
             } TEST_RUN_END();
@@ -49,10 +49,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("//d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("//d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 2);
             } TEST_RUN_END();
         } END_TEST();
@@ -65,10 +65,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/ab/d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("/ab/d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 4);
             } TEST_RUN_END();
         } END_TEST();
@@ -81,10 +81,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/ab/d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("/ab/d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 4);
             } TEST_RUN_END();
         } END_TEST();
@@ -97,10 +97,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/\\<aa\\>/d", i);
-                ASSERT(r.second == 8);
+                std::tie(pos, i) = ParseRegex("/\\<aa\\>/d", i);
+                ASSERT(pos == 8);
                 ASSERT(i == 8);
             } TEST_RUN_END();
         } END_TEST();
@@ -113,10 +113,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/\\<aa\\>/d", i);
-                ASSERT(r.second == 8);
+                std::tie(pos, i) = ParseRegex("/\\<aa\\>/d", i);
+                ASSERT(pos == 8);
                 ASSERT(i == 8);
             } TEST_RUN_END();
         } END_TEST();
@@ -129,10 +129,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("?\\<aa\\>?d", i);
-                ASSERT(r.second == 8);
+                std::tie(pos, i) = ParseRegex("?\\<aa\\>?d", i);
+                ASSERT(pos == 8);
                 ASSERT(i == 8);
             } TEST_RUN_END();
         } END_TEST();
@@ -145,10 +145,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("?aa?d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("?aa?d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 4);
             } TEST_RUN_END();
         } END_TEST();
@@ -162,10 +162,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("??d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("??d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 2);
             } TEST_RUN_END();
         } END_TEST();
@@ -178,10 +178,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("?b a a?d", i);
-                ASSERT(r.second == 10);
+                std::tie(pos, i) = ParseRegex("?b a a?d", i);
+                ASSERT(pos == 10);
                 ASSERT(i == 7);
             } TEST_RUN_END();
         } END_TEST();
@@ -191,10 +191,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/a\\{1,2\\}/d", i);
-                ASSERT(r.second == 2);
+                std::tie(pos, i) = ParseRegex("/a\\{1,2\\}/d", i);
+                ASSERT(pos == 2);
                 ASSERT(i == 10);
                 ASSERT("/a\\{1,2\\}/d"[i] == 'd');
             } TEST_RUN_END();
@@ -215,10 +215,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/ {}$/d", i);
-                ASSERT(r.second == 12);
+                std::tie(pos, i) = ParseRegex("/ {}$/d", i);
+                ASSERT(pos == 12);
                 ASSERT(i == 6);
                 ASSERT("/ {}$/d"[i] == 'd');
             } TEST_RUN_END();
@@ -239,10 +239,10 @@
                 setup();
             } TEST_TEARDOWN_END();
             TEST_RUN() {
-                Range r;
+                int pos;
                 int i = 0;
-                std::tie(r, i) = ParseRegex("/^1.*$/d", i);
-                ASSERT(r.second == 11);
+                std::tie(pos, i) = ParseRegex("/^1.*$/d", i);
+                ASSERT(pos == 11);
                 ASSERT(i == 7);
                 ASSERT("/^1.*$/d"[i] == 'd');
             } TEST_RUN_END();
