@@ -906,20 +906,27 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
         // so let's translate ECMAScript regexes to BRE
         switch(s[i]) {
         case '$':
-            // This one I don't understand... aparent the ECMAScript
-            // pre-parser (?!) makes $ mean EOL and BOL which implies there
-            // is a \n in the stream. I have discovered $$ DOES mean $ in
-            // normal POSIX land. I don't know, let's just roll with it
-            cprintf<CPK::regex>("Translating $ to $$\n");
-            regexText << "$$";
+            if(s[i+1] == '/' || s[i+1] == '?') {
+                // This one I don't understand... aparent the ECMAScript
+                // pre-parser (?!) makes $ mean EOL and BOL which implies there
+                // is a \n in the stream. I have discovered $$ DOES mean $ in
+                // normal POSIX land. I don't know, let's just roll with it
+                cprintf<CPK::regex>("Translating $ to $$\n");
+                regexText << "$$";
+            } else {
+                regexText << "\\$";
+            }
             break;
-#if 0
-        // Apparently ^ matches okay, this is not needed
         case '^':
-            cprintf<CPK::regex>("Translating ^ to ^^n");
-            regexText << "^^";
+            if(s[i-1] == '/' || s[i-1] == '?') {
+                // Apparently ^ matches okay
+                regexText << "^";
+            } else {
+                // except when it should be literal
+                cprintf<CPK::regex>("Translating ^ to \\^\n");
+                regexText << "\\^";
+            }
             break;
-#endif
         case '(':
             cprintf<CPK::regex>("Translating ( to \\(\n");
             regexText << "\\(";

@@ -247,3 +247,49 @@
                 ASSERT("/^1.*$/d"[i] == 'd');
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(matchLiteralDollar) {
+            TEST_SETUP() {
+                auto i = g_state.swapfile.head();
+                while(i->next()) i = i->next();
+                auto l = g_state.swapfile.line("This costs $49");
+                i->link(l);
+                i = l;
+                l = g_state.swapfile.line("1 Line with {}");
+                i->link(l);
+                g_state.nlines = 12;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                int pos;
+                int i = 0;
+                std::tie(pos, i) = ParseRegex("/$49/d", i);
+                ASSERT(pos == 11);
+                ASSERT(i == 5);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(matchLiteralCarret) {
+            TEST_SETUP() {
+                auto i = g_state.swapfile.head();
+                while(i->next()) i = i->next();
+                auto l = g_state.swapfile.line("Look there --^ :-)");
+                i->link(l);
+                i = l;
+                l = g_state.swapfile.line("1 Line with {}");
+                i->link(l);
+                g_state.nlines = 12;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                int pos;
+                int i = 0;
+                std::tie(pos, i) = ParseRegex("/--^/d", i);
+                ASSERT(pos == 11);
+                ASSERT(i == 5);
+            } TEST_RUN_END();
+        } END_TEST();

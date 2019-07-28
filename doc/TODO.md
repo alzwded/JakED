@@ -33,6 +33,9 @@ Regex
 + [ ] s//
 + [ ] s//g
 + [ ] s//N (replace only Nth match)
++ [ ] s//p
++ [ ] s//gp
++ [ ] s//Np
 + [ ] s
 
 Display
