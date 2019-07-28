@@ -23,6 +23,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <functional>
 #include <cstdarg>
 #include <atomic>
+#include <optional>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -129,6 +130,13 @@ struct GState {
     }
 
 } g_state;
+
+struct JakEDException : public std::runtime_error
+{
+    JakEDException(std::string const& s)
+        : runtime_error(s)
+    {}
+};
 
 static int lastWasD = 0;
 static char lastChar = '\0';
@@ -258,7 +266,7 @@ struct Range
         if(_2 < 0) _2 = 0;
         if(_1 > g_state.nlines) _1 = g_state.nlines;
         if(_2 > g_state.nlines) _2 = g_state.nlines;
-        if(_2 < _1) throw std::runtime_error("Backwards range");
+        if(_2 < _1) throw JakEDException("Backwards range");
         return Range(_1, _2);
     }
 
@@ -283,6 +291,8 @@ int SkipWS(std::string const& s, int i)
 }
 
 std::tuple<int, int> ReadNumber(std::string const&, int);
+std::tuple<int, int> ParseRegex(std::string s, int i);
+std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i);
 
 namespace CommandsImpl {
     void r(Range range, std::string tail)
@@ -291,10 +301,10 @@ namespace CommandsImpl {
         int nthLine = range.second;
         tail = tail.substr(SkipWS(tail, 0));
         if(tail.empty()) tail = g_state.filename;
-        if(tail.empty()) throw std::runtime_error("No such file!");
+        if(tail.empty()) throw JakEDException("No such file!");
         size_t bytes = 0;
         if(tail[0] == '!') {
-            throw std::runtime_error("shell execution is not implemented");
+            throw JakEDException("shell execution is not implemented");
         }
         FILE* f = fopen(tail.c_str(), "r");
         struct AtEnd {
@@ -372,7 +382,7 @@ namespace CommandsImpl {
             g_state.swapfile.undo(undoCommand);
             cprintf<CPK::r>("r: n after = %zd, line = %d\n", g_state.nlines, g_state.line);
         } else {
-            throw std::runtime_error("No such file!");
+            throw JakEDException("No such file!");
         }
     }
 
@@ -380,7 +390,7 @@ namespace CommandsImpl {
     {
         tail = tail.substr(SkipWS(tail, 0));
         if(tail.empty()) tail = g_state.filename;
-        if(tail.empty()) throw std::runtime_error("No such file!");
+        if(tail.empty()) throw JakEDException("No such file!");
         return tail;
     }
 
@@ -388,7 +398,7 @@ namespace CommandsImpl {
     {
         tail = getFileName(tail);
         if(tail[0] == '!') {
-            throw std::runtime_error("shell execution is not implemented");
+            throw JakEDException("shell execution is not implemented");
         } else {
             g_state.filename = tail;
         }
@@ -405,7 +415,7 @@ namespace CommandsImpl {
 
     void e(Range range, std::string tail)
     {
-        if(g_state.dirty) throw std::runtime_error("file has modifications");
+        if(g_state.dirty) throw JakEDException("file has modifications");
         return E(range, tail);
     }
 
@@ -437,7 +447,7 @@ namespace CommandsImpl {
 
     void q(Range range, std::string tail)
     {
-        if(g_state.dirty) throw std::runtime_error("file has modifications");
+        if(g_state.dirty) throw JakEDException("file has modifications");
         return Q(range, tail);
     }
 
@@ -475,11 +485,11 @@ namespace CommandsImpl {
 
     void k(Range r, std::string tail)
     {
-        if(tail.empty()) throw std::runtime_error("missing argument");
-        if(tail[0] < 'a' || tail[0] > 'z') throw std::runtime_error("Invalid register. Registers must be a lowercase ASCII letter");
+        if(tail.empty()) throw JakEDException("missing argument");
+        if(tail[0] < 'a' || tail[0] > 'z') throw JakEDException("Invalid register. Registers must be a lowercase ASCII letter");
         int idx = r.second;
         if(idx < 1 || idx > g_state.nlines)
-            throw std::runtime_error("Address out of bounds");
+            throw JakEDException("Address out of bounds");
         auto it = g_state.swapfile.head();
         while(idx-- > 0
                 && it->next())
@@ -499,7 +509,7 @@ namespace CommandsImpl {
             g_state.writeStringFn(ss.str());
             return;
         }
-        if(tail[0] == '!') throw std::runtime_error("Writing to a shell command's STDIN is not implemented");
+        if(tail[0] == '!') throw JakEDException("Writing to a shell command's STDIN is not implemented");
         size_t i = tail.size();
         while(tail[i - 1] == ' ') --i;
         if(i < tail.size()) tail = tail.substr(0, i);
@@ -508,7 +518,7 @@ namespace CommandsImpl {
 
     void EQUALS(Range r, std::string tail)
     {
-        if(r.second < 1 || r.second > g_state.nlines) throw std::runtime_error("invalid range");
+        if(r.second < 1 || r.second > g_state.nlines) throw JakEDException("invalid range");
         std::stringstream ss;
         ss << r.second << std::endl;
         g_state.writeStringFn(ss.str());
@@ -517,13 +527,13 @@ namespace CommandsImpl {
     void commonW(Range r, std::string fname, const char* mode)
     {
         cprintf<CPK::W>("R: [%d, %d]\n", r.first, r.second);
-        if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw std::runtime_error("Invalid range");
+        if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw JakEDException("Invalid range");
         fname = getFileName(fname);
         FILE* f;
         if(fname[0] == '!') throw new std::runtime_error("Writing to pipe not implemented");
         else {
             f = fopen(fname.c_str(), mode);
-            if(!f) throw std::runtime_error("Cannot open file for writing");
+            if(!f) throw JakEDException("Cannot open file for writing");
             if(g_state.filename.empty()) g_state.filename = fname;
         }
 
@@ -579,7 +589,7 @@ namespace CommandsImpl {
             int newWindowSize = 0;
             int i = 0;
             std::tie(newWindowSize, i) = ReadNumber(tail, 0);
-            if(i == 0 || newWindowSize <= 0) throw std::runtime_error("Parse error: invalid window size");
+            if(i == 0 || newWindowSize <= 0) throw JakEDException("Parse error: invalid window size");
             g_state.zWindow = newWindowSize;
         }
         p(Range::R(r.second, r.second + g_state.zWindow - 1), "");
@@ -634,7 +644,7 @@ namespace CommandsImpl {
     void i(Range r, std::string)
     {
         auto pos = r.second;
-        if(pos < 1 || pos >= g_state.nlines) throw std::runtime_error("Invalid range");
+        if(pos < 1 || pos >= g_state.nlines) throw JakEDException("Invalid range");
         return a(Range::S(pos - 1), "");
     }
 
@@ -710,8 +720,8 @@ namespace CommandsImpl {
 
     void j(Range r, std::string tail)
     {
-        if(r.first >= r.second) throw std::runtime_error("j(oin) needs a range of at least two lines");
-        if(r.first < 1) throw std::runtime_error("Invalid range");
+        if(r.first >= r.second) throw JakEDException("j(oin) needs a range of at least two lines");
+        if(r.first < 1) throw JakEDException("Invalid range");
         deleteLines(r, false);
         auto oldLines = g_state.swapfile.undo()->next();
         auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
@@ -756,6 +766,94 @@ namespace CommandsImpl {
         g_state.swapfile.undo(newUndoHead);
     }
 
+    // See doc/UndoAndSwapFile.md#s----algorithm
+    // I was lazy to name my variables accordingly, and that doc
+    // explains better what's what and why
+    void s(Range r, std::string tail)
+    {
+        auto it = g_state.swapfile.head(); // 60
+        int idx = r.first;
+        while(idx-- > 1 && it) { // 60
+            it = it->next();
+            if(CtrlC()) return;
+        }
+
+        if(!it) throw JakEDException("Invalid range");
+
+        // TODO "s\0" requires storing the second part somewhere
+
+        std::optional<std::exception> ex; // 10
+        g_state.line = r.first; // 20
+        int line = 0;
+        int i = 0;
+        tail = tail.substr(SkipWS(tail, i));
+        // 30 set up call which depends on global
+        int lineToMatch = g_state.line;
+        --g_state.line;
+        if(g_state.line <= 0) g_state.line = g_state.nlines;
+        std::tie(line, i) = ParseRegex(tail, i); // 30
+        if(line != lineToMatch) throw JakEDException("Line does not match"); // let exception propagate since we didn't do anything yet
+        g_state.line = r.first; // 20 again
+        std::string fmt;
+        int G_OR_N = 0;
+        bool printLine;
+        std::tie(fmt, G_OR_N, printLine) = ParseReplaceFormat(tail.substr(i), 0); // 35
+
+        auto uh = g_state.swapfile.line(""); // 40
+        auto up = uh->Copy(); // 50
+
+        for(; g_state.line <= r.second;) { // 70
+            if(CtrlC()) {
+                ex = JakEDException("Interrupted");
+                break;
+            }
+            auto ax = it->next(); // 80
+            if(!ax) {
+                ex = JakEDException("Internal error - EOF encountered");
+                break;
+            }
+            auto cx = ax->text(); // 90
+            if(!std::regex_search(cx, g_state.regexp)) { // 100
+                ex = JakEDException("Line does not match"); // 110
+            }
+            // 120 -----v
+            std::regex_constants::match_flag_type flags = 
+                std::regex_constants::match_flag_type::format_sed;
+            if(G_OR_N == -1) {
+            } else if(G_OR_N == 0) {
+                flags = flags | std::regex_constants::match_flag_type::format_first_only;
+            } else {
+                ex = JakEDException("Internal error - s///n not implemented");
+                break;
+            }
+            try {
+                cx = std::regex_replace(cx, g_state.regexp, fmt, flags);
+            } catch(std::exception& er) {
+                ex = er;
+                break;
+            }
+            // 120 -----^
+            ax = g_state.swapfile.line(cx); // 130
+            ax->link(it->next()->next()); // 140
+            it->next()->link(); // 150
+            up->link(it->next()); // 160
+            it->link(ax); // 170;
+
+            it = it->next(); // 180
+            up = up->next(); // 190
+            if(ex) break; // 200
+            g_state.line++; // 205
+            g_state.dirty = true;
+        }
+
+        std::stringstream undoBuffer;
+        undoBuffer << r.first << "," << g_state.line << "c";
+        auto ul = g_state.swapfile.line(undoBuffer.str()); // 210
+        g_state.swapfile.undo(ul); // 220
+        ul->link(uh->next()); // 230
+
+        if(ex) throw *ex; // 240
+    }
 
 }
 
@@ -782,6 +880,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'c', &CommandsImpl::c },
     { 'd', &CommandsImpl::d },
     { 'j', &CommandsImpl::j },
+    { 's', &CommandsImpl::s },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -871,16 +970,16 @@ std::tuple<Range, int> ParseCommaOrOffset(int base, std::string const& s, int i)
 std::tuple<Range, int> ParseRegister(std::string const& s, int i)
 {
     i = SkipWS(s, i);
-    if(s[i] != '\'') throw std::runtime_error("Internal parsing error: unexpected '");
+    if(s[i] != '\'') throw JakEDException("Internal parsing error: unexpected '");
     ++i;
-    if(s[i] < 'a' || s[i] > 'z') throw std::runtime_error("Syntax error: register reference expects a register. Registers may be lower-case ASCII characters");
+    if(s[i] < 'a' || s[i] > 'z') throw JakEDException("Syntax error: register reference expects a register. Registers may be lower-case ASCII characters");
     char r = s[i];
     ++i;
     auto found = g_state.registers.find(r);
     if(found == g_state.registers.end()) {
         std::stringstream ss;
         ss << "Register " << r << " is empty";
-        throw std::runtime_error(ss.str());
+        throw JakEDException(ss.str());
     }
     auto it = g_state.swapfile.head();
     size_t index = 0;
@@ -893,9 +992,42 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     return ParseCommaOrOffset(index, s, i);
 }
 
+// [fmt, G_OR_N, p]
+// G_OR_N ::= 'g'               -> -1
+//          | [0-9][0-9]*       -> N
+//          ;
+std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i)
+{
+    auto p = s.substr(i).find('/');
+    if(p == std::string::npos) throw JakEDException("Internal error - invalid invocatino of ParseReplaceFormat");
+    std::string fmt = s.substr(i).substr(0, p); // assume format_sed actually does what I think it does
+    s = s.substr(i).substr(p + 1);
+    i = i + p + 1;
+    s = s.substr(SkipWS(s, 0));
+    int G_OR_N = 0;
+    bool print = false;
+    switch(s[0]) {
+    case 'g':
+        G_OR_N = -1;
+        ++i;
+        break;
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+    {
+        int j = 0;
+        std::tie(G_OR_N, j) = ReadNumber(s, 0);
+        i += j;
+    } break;
+    default:
+        break;
+    }
+
+    return std::make_tuple(fmt, G_OR_N, print);
+}
+
 std::tuple<int, int> ParseRegex(std::string s, int i)
 {
-    if(s[0] != '/' && s[0] != '?') throw std::runtime_error("Internal parse error: expected regex to start with / or ?");
+    if(s[0] != '/' && s[0] != '?') throw JakEDException("Internal parse error: expected regex to start with / or ?");
     ++i;
     std::stringstream regexText;
     cprintf<CPK::regex>("Grabbing expression\n");
@@ -1019,7 +1151,7 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
         ref = ref->next();
         if(!ref) ref = g_state.swapfile.head()->next();
         if(CtrlC()) {
-            throw std::runtime_error("Interrupted");
+            throw JakEDException("Interrupted");
         }
     }
     cprintf<CPK::regex>("line %d == fromLine %d, text == %s\n", line, g_state.line, ref->text().c_str());
@@ -1042,7 +1174,7 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
             if(CtrlC()) {
                 break;
             }
-            if(it == ref) throw std::runtime_error("Pattern not found");
+            if(it == ref) throw JakEDException("Pattern not found");
         }
     } else {
         cprintf<CPK::regex>("Searching backwards\n");
@@ -1073,7 +1205,7 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 line = 1;
             }
         }
-        if(lastFound == 0) throw std::runtime_error("Pattern not found");
+        if(lastFound == 0) throw JakEDException("Pattern not found");
         cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
         return std::make_tuple(lastFound, i + 1);
     }
@@ -1148,12 +1280,12 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'j': case 'm': case 't': case 'y': case '!':
         case 'x': case 'r': case 'l': case 'z': case '=':
         case 'W': case 'e': case 'E': case 'f': case 'w':
-        case 'q': case 'Q': case 'n':
+        case 'q': case 'Q': case 'n': case 's':
         case '\n':
             //return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
             return std::make_tuple(r, s[i], s.substr(i + 1));
         default:
-            throw std::runtime_error("Syntax error");
+            throw JakEDException("Syntax error");
     }
 }
 
@@ -1298,6 +1430,7 @@ int main(int argc, char* argv[])
     std::string file = argv[1];
     if(file.empty()) exit_usage("No such file!", argv[0]);
     Commands.at('r')(Range::ZERO(), file);
+    g_state.dirty = false;
 
     Loop();
     return 0;

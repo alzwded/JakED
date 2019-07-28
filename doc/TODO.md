@@ -26,12 +26,13 @@ Regex
 + [x] ??
 + [x] ranges based off of regexes
 + [ ] g//
+  * [ ] mutiline "command-list"
 + [ ] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
 + [ ] G//
 + [ ] v//
 + [ ] V//
-+ [ ] s//
-+ [ ] s//g
++ [x] s//
++ [x] s//g
 + [ ] s//N (replace only Nth match)
 + [ ] s//p
 + [ ] s//gp
@@ -48,6 +49,7 @@ Display
 + [x] zN
 + [x] =
 + [x] <CR>
++ [ ] Interactive write string prints UTF16 so that conhost shows unicode properly
 
 Misc
 ----

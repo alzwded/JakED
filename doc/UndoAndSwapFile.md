@@ -186,3 +186,62 @@ Reasons:
 + it is something "you see", i.e. we'd be testing mostly glue code
 
 It would be best if there were a separate test suite for `Swapfile/FileImpl`
+
+s/// algorithm
+--------------
+
+This command has a bit of a more complicated algorithm because it tries to stay stable in case of interrupts or regex errors. So, at each step, it tries to perform the replacement, and if it succeds, swaps out the old line for the new line and links predecessors and successors accordingly. The old line is then pushed to an undo list that has a temporary head because at this point we have no idea how many lines we will end up touching, so we cannot initialize the real undo command line.
+
+```
+Let FILE have 6 lines.
+We will perform a 3,5s/re/fm/ which will affect all lines 3 and 4 and error out on the 5th
+1
+2
+3   -> 3'
+4   -> 4'
+5   -> !
+6
+
+  0 GS <- g_state                           ; alias
+ 10 ex <- NUL                               ; hold any raised exception
+ 20 GS.line <- 3                            ; set line to working line
+ 30 if ParseRegex(tail).line != GS.line     ; initialize regex to avoid recompiling
+        throw
+ 35 fmt <- ParseReplaceFormat(tail)         ; cache format since it's the same
+ 40 uh <- swapfile.line("")                 ; undo head (stub; 10 byte overhead)
+ 50 up <- uh->Copy()                        ; undo working pointer
+ 60 it <- 2                                 ; it points to the second line
+ 70 loop
+ 80     ax <- it->next()                    ; set accumulator to current line
+ 90     cx <- ax->text()                    ; grab text in another accumulator
+100     if ParseRegex(//).line != GS.line   ; if line doesn't match regex
+110         set ex = "Line doesn't match"   ; simulate exception 
+120     cx <- s(cx, GS.regexp)              ; perform replace and keep string
+            ! catch(ex)                     ; catch exceptions
+130     ax <- swapfile.line(cx)             ; add a new line
+140     ax->link(it->next()->next())        ; link new line to the
+                                            ; current line's successor
+150     it->next()->link()                  ; unlink current line
+160     up->link(it->next())                ; link undo pointer to current line
+170     it->link(ax)                        ; link previous line to new line
+    
+180     it <- it->next()                    ; move it to new line, whose successor
+                                            ; is the next line in the original text
+190     up <- up->next()                    ; move undo pointer to the deleted line
+    
+200     if ex                               ; if exceptions were set,
+            ! break                         ; break
+
+205     GS.line ++                          ; increment work line
+    until GS.line > 5                       ; continue until all lines were processed
+    
+210 ul <- swapfile.line(3 << "," << line << "c") ; initialize undo command
+                                            ; to replace all affected lines
+220 swapfile.undo(ul)                       ; set undo register
+230 ul->link(uh->next())                    ; link undo register to the first
+                                            ; real line in our undo list
+                                            ; (the head was a 10 byte stub)
+    
+240 if ex                                   ; if an exception was set,
+        ! throw ex                          ; reraise
+```
