@@ -77,7 +77,7 @@ struct GState {
         , decltype(Hmode) _Hmode = false
         , decltype(zWindow) _zWindow = 1
         , decltype(showPrompt) _showPrompt = false
-        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::basic})
+        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript})
         : filename(_filename)
         , line(_line)
         , PROMPT(_PROMPT)
@@ -109,7 +109,7 @@ struct GState {
         , decltype(Hmode) _Hmode = false
         , decltype(zWindow) _zWindow = 1
         , decltype(showPrompt) _showPrompt = false
-        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::basic})
+        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript})
     {
         filename = _filename;
         line = _line;
@@ -927,19 +927,105 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
     std::stringstream regexText;
     cprintf<CPK::regex>("Grabbing expression\n");
     while(s[i] != '\0' && s[i] != '/' && s[i] != '?') {
-        regexText << s[i];
-        ++i;
-        if(s[i] == '\\') {
+        cprintf<CPK::regex>("at %c\n", s[i]);
+        // ECMAScript is the only one that supports word boundaries
+        // MSDN has a nice page outlining the capabilities (C++ regex quick ref)
+        // so let's translate ECMAScript regexes to BRE
+        switch(s[i]) {
+        case '$':
+            // This one I don't understand... aparent the ECMAScript
+            // pre-parser (?!) makes $ mean EOL and BOL which implies there
+            // is a \n in the stream. I have discovered $$ DOES mean $ in
+            // normal POSIX land. I don't know, let's just roll with it
+            cprintf<CPK::regex>("Translating $ to $$\n");
+            regexText << "$$";
+            break;
+#if 0
+        // Apparently ^ matches okay, this is not needed
+        case '^':
+            cprintf<CPK::regex>("Translating ^ to ^^n");
+            regexText << "^^";
+            break;
+#endif
+        case '(':
+            cprintf<CPK::regex>("Translating ( to \\(\n");
+            regexText << "\\(";
+            break;
+        case ')':
+            cprintf<CPK::regex>("Translating ) to \\)\n");
+            regexText << "\\)";
+            break;
+        case '{':
+            cprintf<CPK::regex>("Translating { to \\{\n");
+            regexText << "\\{";
+            break;
+        case '}':
+            cprintf<CPK::regex>("Translating } to \\}\n");
+            regexText << "\\}";
+            break;
+        case '+':
+            cprintf<CPK::regex>("Translating + to \\+\n");
+            regexText << "\\+";
+            break;
+        case '?':
+            cprintf<CPK::regex>("Translating ? to \\?\n");
+            regexText << "\\?";
+            break;
+        case '\\':
             ++i;
             cprintf<CPK::regex>("Escaping %c\n", s[i]);
             if(s[i] == '\0') break;
+            // translations to POSIX
+            switch(s[i]) {
+            case '<':
+                cprintf<CPK::regex>("Translating \\< to \\b\n");
+                regexText << "\\b";
+                break;
+            case '>':
+                cprintf<CPK::regex>("Translating \\> to \\b\n");
+                regexText << "\\b";
+                break;
+            case '(':
+                cprintf<CPK::regex>("Translating \\( to (\n");
+                regexText << "(";
+                break;
+            case ')':
+                cprintf<CPK::regex>("Translating \\) to )\n");
+                regexText << ")";
+                break;
+            case '{':
+                cprintf<CPK::regex>("Translating \\{ to {\n");
+                regexText << "{";
+                break;
+            case '}':
+                cprintf<CPK::regex>("Translating \\} to }\n");
+                regexText << "}";
+                break;
+            case '+':
+                cprintf<CPK::regex>("Translating \\+ to +\n");
+                regexText << "+";
+                break;
+            case '?':
+                cprintf<CPK::regex>("Translating \\? to ?\n");
+                regexText << "?";
+                break;
+            default:
+                regexText << '\\' << s[i];
+                break;
+            }
+            break;
+        default:
             regexText << s[i];
+            break;
         }
+        ++i;
     }
 
     if(!regexText.str().empty()) {
-        g_state.regexp = std::regex(regexText.str(), std::regex_constants::basic);
         cprintf<CPK::regex>("Text is %s\n", regexText.str().c_str());
+        // ECMAScript is the only one that supports word boundaries
+        // MSDN has a nice page outlining the capabilities (C++ regex quick ref)
+        g_state.regexp = std::regex(regexText.str(), std::regex_constants::ECMAScript);
     } else {
         cprintf<CPK::regex>("Repeating regex\n");
     }
@@ -968,7 +1054,6 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
                 it = g_state.swapfile.head()->next();
                 line = 1;
             }
-            if(it == ref) throw std::runtime_error("Pattern not found");
             cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
             if(std::regex_search(it->text(), g_state.regexp)) {
                 cprintf<CPK::regex>("Found at %d\n", line);
@@ -977,22 +1062,20 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
             if(CtrlC()) {
                 break;
             }
+            if(it == ref) throw std::runtime_error("Pattern not found");
         }
     } else {
         cprintf<CPK::regex>("Searching backwards\n");
         int lastFound = 0;
+        bool flag = false;
         while(it) {
-            it = it->next();
-            ++line;
-            if(!it) {
-                cprintf<CPK::regex>("wrapping\n");
-                it = g_state.swapfile.head()->next();
-                line = 1;
-            }
             if(it == ref) {
-                if(lastFound == 0) throw std::runtime_error("Pattern not found");
-                cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
-                return std::make_tuple(Range::S(lastFound), i + 1);
+                if(flag) {
+                    cprintf<CPK::regex>("Alreayd visited self, breaking\n");
+                    break;
+                }
+                cprintf<CPK::regex>("Vising self once\n");
+                flag = true;
             }
             cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
             if(std::regex_search(it->text(), g_state.regexp)) {
@@ -1002,7 +1085,17 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
             if(CtrlC()) {
                 break;
             }
+            it = it->next();
+            ++line;
+            if(!it) {
+                cprintf<CPK::regex>("wrapping\n");
+                it = g_state.swapfile.head()->next();
+                line = 1;
+            }
         }
+        if(lastFound == 0) throw std::runtime_error("Pattern not found");
+        cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
+        return std::make_tuple(Range::S(lastFound), i + 1);
     }
 
     throw::std::runtime_error("internal error");

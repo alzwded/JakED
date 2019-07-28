@@ -89,6 +89,54 @@
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(searchForwardWordBoundary) {
+            TEST_SETUP() {
+                g_state.line = 1;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("/\\<aa\\>/d", i);
+                ASSERT(r.second == 8);
+                ASSERT(i == 8);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(searchForwardWrapToSelf) {
+            TEST_SETUP() {
+                g_state.line = 8;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("/\\<aa\\>/d", i);
+                ASSERT(r.second == 8);
+                ASSERT(i == 8);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(searchBackWrapToSelf) {
+            TEST_SETUP() {
+                g_state.line = 8;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("?\\<aa\\>?d", i);
+                ASSERT(r.second == 8);
+                ASSERT(i == 8);
+            } TEST_RUN_END();
+        } END_TEST();
+
         DEF_TEST(searchBack1) {
             TEST_SETUP() {
                 g_state.line = 8;
@@ -135,5 +183,67 @@
                 std::tie(r, i) = ParseRegex("?b a a?d", i);
                 ASSERT(r.second == 10);
                 ASSERT(i == 7);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(searchForwardNumericRepeat) {
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("/a\\{1,2\\}/d", i);
+                ASSERT(r.second == 2);
+                ASSERT(i == 10);
+                ASSERT("/a\\{1,2\\}/d"[i] == 'd');
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(searchForwardRawCurlyBrackets) {
+            TEST_SETUP() {
+                auto i = g_state.swapfile.head();
+                while(i->next()) i = i->next();
+                auto l = g_state.swapfile.line("1 Line with {} not at the end");
+                i->link(l);
+                i = l;
+                l = g_state.swapfile.line("1 Line with {}");
+                i->link(l);
+                g_state.nlines = 12;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("/ {}$/d", i);
+                ASSERT(r.second == 12);
+                ASSERT(i == 6);
+                ASSERT("/ {}$/d"[i] == 'd');
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(matchBOL) {
+            TEST_SETUP() {
+                auto i = g_state.swapfile.head();
+                while(i->next()) i = i->next();
+                auto l = g_state.swapfile.line("1 Line with {} not at the end");
+                i->link(l);
+                i = l;
+                l = g_state.swapfile.line("1 Line with {}");
+                i->link(l);
+                g_state.nlines = 12;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRegex("/^1.*$/d", i);
+                ASSERT(r.second == 11);
+                ASSERT(i == 7);
+                ASSERT("/^1.*$/d"[i] == 'd');
             } TEST_RUN_END();
         } END_TEST();

@@ -20,10 +20,10 @@ Navigation
 Regex
 -----
 
-+ [ ] /RE/
-+ [ ] ?RE?
-+ [ ] //
-+ [ ] ??
++ [x] /RE/
++ [x] ?RE?
++ [x] //
++ [x] ??
 + [ ] g//
 + [ ] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
 + [ ] G//
