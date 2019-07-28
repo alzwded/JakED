@@ -24,6 +24,7 @@ Regex
 + [x] ?RE?
 + [x] //
 + [x] ??
++ [x] ranges based off of regexes
 + [ ] g//
 + [ ] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
 + [ ] G//

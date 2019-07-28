@@ -229,16 +229,17 @@ void DEFINE_SUITES() {
             } TEST_RUN_END();
         } END_TEST();
     } END_SUITE();
-    DEF_SUITE(30_ParseRange) {
-#       include "test/30_ParseRange.ixx"
+
+    DEF_SUITE(30_Regex) {
+#       include "test/30_Regex.ixx"
     } END_SUITE();
 
-    DEF_SUITE(40_ParseCommand) {
-#       include "test/40_ParseCommand.ixx"
+    DEF_SUITE(50_ParseRange) {
+#       include "test/50_ParseRange.ixx"
     } END_SUITE();
 
-    DEF_SUITE(60_Regex) {
-#       include "test/60_Regex.ixx"
+    DEF_SUITE(60_ParseCommand) {
+#       include "test/60_ParseCommand.ixx"
     } END_SUITE();
 
     DEF_SUITE(80_Integration) {

@@ -801,6 +801,7 @@ std::tuple<Range, int> ParseFromComma(int base, std::string const& s, int i, boo
         case ',': case '.': case '+': case '-': case '$': case ';':
         case '0': case '1': case '2': case '3': case '4': case '\'':
         case '5': case '6': case '7': case '8': case '9':
+        case '/': case '?':
             std::tie(temp, i) = ParseRange(s, i);
             return std::make_tuple(Range::R(base, temp.second), i);
         default:
@@ -859,6 +860,7 @@ std::tuple<Range, int> ParseCommaOrOffset(int base, std::string const& s, int i)
             return ParseFromComma(base, s, i);
         case '+':
         case '-':
+            cprintf<CPK::parser>("Parsing offset\n");
             return ParseFromOffset(base, s, i);
         default:
             return std::make_tuple(Range::S(base), i);
@@ -889,35 +891,6 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
         ++index;
     }
     return ParseCommaOrOffset(index, s, i);
-}
-
-std::tuple<Range, int> ParseRange(std::string const& s, int i)
-{
-    i = SkipWS(s, i);
-    int left = 0;
-    switch(s[i]) {
-        case ';':
-            return ParseFromComma(Range::Dot(), s, i, true);
-        case '$':
-            return std::make_tuple(Range::S(Range::Dollar()), i + 1);
-        case ',':
-            return ParseFromComma(1, s, i, true);
-        case '.':
-            ++i;
-            return ParseCommaOrOffset(Range::Dot(), s, i);
-        case '0': case '1': case '2': case '3': case '4':
-        case '5': case '6': case '7': case '8': case '9':
-        {
-            std::tie(left, i) = ReadNumber(s, i);
-            return ParseCommaOrOffset(left, s, i);
-        }
-        case '+': case '-':
-            return ParseFromOffset(Range::Dot(), s, i);
-        case '\'':
-            return ParseRegister(s, i);
-        default:
-            return std::make_tuple(Range::S(Range::Dot()), i);
-    }
 }
 
 std::tuple<Range, int> ParseRegex(std::string s, int i)
@@ -1101,6 +1074,42 @@ std::tuple<Range, int> ParseRegex(std::string s, int i)
     throw::std::runtime_error("internal error");
 }
 
+std::tuple<Range, int> ParseRange(std::string const& s, int i)
+{
+    i = SkipWS(s, i);
+    int left = 0;
+    switch(s[i]) {
+        case ';':
+            return ParseFromComma(Range::Dot(), s, i, true);
+        case '$':
+            return std::make_tuple(Range::S(Range::Dollar()), i + 1);
+        case ',':
+            return ParseFromComma(1, s, i, true);
+        case '.':
+            ++i;
+            return ParseCommaOrOffset(Range::Dot(), s, i);
+        case '0': case '1': case '2': case '3': case '4':
+        case '5': case '6': case '7': case '8': case '9':
+        {
+            std::tie(left, i) = ReadNumber(s, i);
+            return ParseCommaOrOffset(left, s, i);
+        }
+        case '+': case '-':
+            return ParseFromOffset(Range::Dot(), s, i);
+        case '\'':
+            return ParseRegister(s, i);
+        case '/':
+        case '?':
+        {
+            Range r;
+            std::tie(r, i) = ParseRegex(s, i);
+            return ParseCommaOrOffset(r.second, s, i);
+        }
+        default:
+            return std::make_tuple(Range::S(Range::Dot()), i);
+    }
+}
+
 // [Range, command, tail]
 std::tuple<Range, char, std::string> ParseCommand(std::string s)
 {
@@ -1118,11 +1127,8 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'g': case 'G': case 'r': 
             r = Range::R(1, Range::Dollar());
             break;
-        case '/': case '?':
-            std::tie(r, i) = ParseRegex(s, i);
-            break;
         default:
-        case '\'':
+        case '/': case '?': case '\'':
         case '+': case '-': case ',': case ';': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
