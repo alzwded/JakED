@@ -237,6 +237,10 @@ void DEFINE_SUITES() {
 #       include "test/40_ParseCommand.ixx"
     } END_SUITE();
 
+    DEF_SUITE(60_Regex) {
+#       include "test/60_Regex.ixx"
+    } END_SUITE();
+
     DEF_SUITE(80_Integration) {
 #       include "test/80_Integration.ixx"
     } END_SUITE();

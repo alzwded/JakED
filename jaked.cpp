@@ -61,6 +61,7 @@ struct GState {
     bool Hmode = false;
     int zWindow = 1;
     bool showPrompt = false;
+    std::regex regexp;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -75,7 +76,8 @@ struct GState {
         , decltype(error) _error = false
         , decltype(Hmode) _Hmode = false
         , decltype(zWindow) _zWindow = 1
-        , decltype(showPrompt) _showPrompt = false)
+        , decltype(showPrompt) _showPrompt = false
+        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::basic})
         : filename(_filename)
         , line(_line)
         , PROMPT(_PROMPT)
@@ -90,6 +92,7 @@ struct GState {
         , Hmode(_Hmode)
         , zWindow(_zWindow)
         , showPrompt(_showPrompt)
+        , regexp(_regexp)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -105,7 +108,8 @@ struct GState {
         , decltype(error) _error = false
         , decltype(Hmode) _Hmode = false
         , decltype(zWindow) _zWindow = 1
-        , decltype(showPrompt) _showPrompt = false)
+        , decltype(showPrompt) _showPrompt = false
+        , decltype(regexp) _regexp = std::regex{".", std::regex_constants::basic})
     {
         filename = _filename;
         line = _line;
@@ -121,6 +125,7 @@ struct GState {
         Hmode = _Hmode;
         zWindow = _zWindow;
         showPrompt = _showPrompt;
+        regexp = _regexp;
     }
 
 } g_state;
@@ -915,12 +920,99 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
     }
 }
 
+std::tuple<Range, int> ParseRegex(std::string s, int i)
+{
+    if(s[0] != '/' && s[0] != '?') throw std::runtime_error("Internal parse error: expected regex to start with / or ?");
+    ++i;
+    std::stringstream regexText;
+    cprintf<CPK::regex>("Grabbing expression\n");
+    while(s[i] != '\0' && s[i] != '/' && s[i] != '?') {
+        regexText << s[i];
+        ++i;
+        if(s[i] == '\\') {
+            ++i;
+            cprintf<CPK::regex>("Escaping %c\n", s[i]);
+            if(s[i] == '\0') break;
+            regexText << s[i];
+        }
+    }
+
+    if(!regexText.str().empty()) {
+        g_state.regexp = std::regex(regexText.str(), std::regex_constants::basic);
+        cprintf<CPK::regex>("Text is %s\n", regexText.str().c_str());
+    } else {
+        cprintf<CPK::regex>("Repeating regex\n");
+    }
+
+    auto ref = g_state.swapfile.head();
+    auto fromLine = g_state.line;
+    int line = 0;
+    cprintf<CPK::regex>("Finding line %d\n", fromLine);
+    while(ref && fromLine--) {
+        ++line;
+        ref = ref->next();
+        if(!ref) ref = g_state.swapfile.head()->next();
+        if(CtrlC()) {
+            return std::make_tuple(Range::ZERO(), i);
+        }
+    }
+    cprintf<CPK::regex>("line %d == fromLine %d, text == %s\n", line, g_state.line, ref->text().c_str());
+    auto it = ref->Copy();
+    if(s[0] == '/') {
+        cprintf<CPK::regex>("Searching forward\n");
+        while(it) {
+            it = it->next();
+            ++line;
+            if(!it) {
+                cprintf<CPK::regex>("wrapping\n");
+                it = g_state.swapfile.head()->next();
+                line = 1;
+            }
+            if(it == ref) throw std::runtime_error("Pattern not found");
+            cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
+            if(std::regex_search(it->text(), g_state.regexp)) {
+                cprintf<CPK::regex>("Found at %d\n", line);
+                return std::make_tuple(Range::S(line), i + 1);
+            }
+            if(CtrlC()) {
+                break;
+            }
+        }
+    } else {
+        cprintf<CPK::regex>("Searching backwards\n");
+        int lastFound = 0;
+        while(it) {
+            it = it->next();
+            ++line;
+            if(!it) {
+                cprintf<CPK::regex>("wrapping\n");
+                it = g_state.swapfile.head()->next();
+                line = 1;
+            }
+            if(it == ref) {
+                if(lastFound == 0) throw std::runtime_error("Pattern not found");
+                cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
+                return std::make_tuple(Range::S(lastFound), i + 1);
+            }
+            cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
+            if(std::regex_search(it->text(), g_state.regexp)) {
+                cprintf<CPK::regex>("Found a match on line %d\n", line);
+                lastFound = line;
+            }
+            if(CtrlC()) {
+                break;
+            }
+        }
+    }
+
+    throw::std::runtime_error("internal error");
+}
+
 // [Range, command, tail]
 std::tuple<Range, char, std::string> ParseCommand(std::string s)
 {
     size_t i = 0;
     Range r;
-    bool whitespacing = true;
     i = SkipWS(s, i);
     switch(s[i]) {
         case 'j':
@@ -933,8 +1025,11 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'g': case 'G': case 'r': 
             r = Range::R(1, Range::Dollar());
             break;
+        case '/': case '?':
+            std::tie(r, i) = ParseRegex(s, i);
+            break;
         default:
-        case '\'': case '/':
+        case '\'':
         case '+': case '-': case ',': case ';': case '$':
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':

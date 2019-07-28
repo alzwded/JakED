@@ -16,6 +16,7 @@ j \
 parser \
 error \
 swap \
+regex \
 
 # leave above line blank
 
