@@ -782,7 +782,8 @@ namespace CommandsImpl {
 
         // TODO "s\0" requires storing the second part somewhere
 
-        std::optional<std::exception> ex; // 10
+        auto pushedDot = g_state.line;
+        std::exception_ptr ex; // 10
         g_state.line = r.first; // 20
         int line = 0;
         int i = 0;
@@ -791,8 +792,14 @@ namespace CommandsImpl {
         int lineToMatch = g_state.line;
         --g_state.line;
         if(g_state.line <= 0) g_state.line = g_state.nlines;
-        std::tie(line, i) = ParseRegex(tail, i); // 30
-        if(line != lineToMatch) throw JakEDException("Line does not match"); // let exception propagate since we didn't do anything yet
+        try {
+            std::tie(line, i) = ParseRegex(tail, i); // 30
+            if(line != lineToMatch) throw JakEDException("Line does not match"); // let exception propagate since we didn't do anything yet
+        } catch(...) {
+            // restore initial state since we didn't touch anything yet
+            g_state.line = pushedDot;
+            std::rethrow_exception(std::current_exception());
+        }
         g_state.line = r.first; // 20 again
         std::string fmt;
         int G_OR_N = 0;
@@ -802,19 +809,19 @@ namespace CommandsImpl {
         auto uh = g_state.swapfile.line(""); // 40
         auto up = uh->Copy(); // 50
 
-        for(; g_state.line <= r.second;) { // 70
+        for(; g_state.line <= r.second; pushedDot = -1) { // 70
             if(CtrlC()) {
-                ex = JakEDException("Interrupted");
+                ex = std::make_exception_ptr(JakEDException("Interrupted"));
                 break;
             }
             auto ax = it->next(); // 80
             if(!ax) {
-                ex = JakEDException("Internal error - EOF encountered");
+                ex = std::make_exception_ptr(JakEDException("Internal error - EOF encountered"));
                 break;
             }
             auto cx = ax->text(); // 90
             if(!std::regex_search(cx, g_state.regexp)) { // 100
-                ex = JakEDException("Line does not match"); // 110
+                ex = std::make_exception_ptr(JakEDException("Line does not match")); // 110
             }
             // 120 -----v
             std::regex_constants::match_flag_type flags = 
@@ -823,13 +830,13 @@ namespace CommandsImpl {
             } else if(G_OR_N == 0) {
                 flags = flags | std::regex_constants::match_flag_type::format_first_only;
             } else {
-                ex = JakEDException("Internal error - s///n not implemented");
+                ex = std::make_exception_ptr(JakEDException("Internal error - s///n not implemented"));
                 break;
             }
             try {
                 cx = std::regex_replace(cx, g_state.regexp, fmt, flags);
-            } catch(std::exception& er) {
-                ex = er;
+            } catch(...) {
+                ex = std::current_exception();
                 break;
             }
             // 120 -----^
@@ -852,7 +859,11 @@ namespace CommandsImpl {
         g_state.swapfile.undo(ul); // 220
         ul->link(uh->next()); // 230
 
-        if(ex) throw *ex; // 240
+        g_state.line--;
+        if(ex) {
+            if(pushedDot >= 0) g_state.line = pushedDot; // pop!
+            std::rethrow_exception(ex); // 240
+        }
     }
 
 }

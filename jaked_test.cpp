@@ -11,6 +11,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 */
 
 #include <exception>
+#include <optional>
+#include <vector>
+#include <string>
 struct test_error : std::exception
 {
     test_error(const char* what)
@@ -244,6 +247,10 @@ void DEFINE_SUITES() {
 
     DEF_SUITE(80_Integration) {
 #       include "test/80_Integration.ixx"
+    } END_SUITE();
+
+    DEF_SUITE(81_Substitute) {
+#       include "test/81_Substitute.ixx"
     } END_SUITE();
 
     DEF_SUITE(90_System) {
