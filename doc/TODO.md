@@ -44,12 +44,14 @@ Display
 
 + [x] .,.p
 + [x] .,.l
+  + [ ] print specials chars in inverted mode
 + [x] .,.pn
 + [x] .,.n
 + [x] zN
 + [x] =
 + [x] <CR>
-+ [ ] Interactive write string prints UTF16 so that conhost shows unicode properly
++ [x] ~~Interactive write string prints UTF16 so that conhost shows unicode properly~~ print out UTF8 correctly
++ [ ] **read** utf8 correctly on console
 
 Misc
 ----

@@ -38,6 +38,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "cprintf.h"
 
 HANDLE TheConsoleStdin = NULL;
+UINT oldConsoleOutputCP = 0, oldConsoleInputCP = 0;
+void __cdecl RestoreConsoleCP()
+{
+    if(oldConsoleOutputCP) SetConsoleOutputCP(oldConsoleOutputCP);
+    if(oldConsoleInputCP) SetConsoleCP(oldConsoleInputCP);
+}
 
 volatile std::atomic<bool> ctrlc = false;
 volatile std::atomic<bool> ctrlint = false;
@@ -169,12 +175,35 @@ int Interactive_readCharFn()
         // actually get an ERROR_OPERATION_ABORTED error
         // if they are interrupted (as defined for ^C and ^BRK)
         cprintf<CPK::CTRLC2>("reading\n");
+        // FIXME should use ReadConsoleW and WideCharToMultiByte(UTF8)
+        //       and stream characters in to support unicode input
+        // Output works via SetConsoleOutputCP
+#if 0
+        // maybe read something to the extent of a full line? ReadConsoleW returns after \n
+        wchar_t buf[400];
+        char buf2[1600];
+        auto success = ReadConsoleW(
+                TheConsoleStdin,
+                &buf,
+                400,
+                &rv,
+                NULL); // maybe use this CONSOLE_READCONSOLE_CONTROL thing to support ^V<literal>? I doubt it, though
+        auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, 20, NULL, NULL);
+        buf2[cchbuf] = '\0';
+        printf("as utf8: %s\n", buf2);
+        // ^---- this is printed correctly as UTF8
+        printf("as utf8 bis:"); for(auto p = buf2; *p; printf("%X", *p++)); printf("\n");
+        // ^---- this needs to be streamed
+        c = buf2[0];
+#else
         auto success = ReadConsoleA(
                 TheConsoleStdin,
                 &c,
                 1,
                 &rv,
                 NULL);
+#endif
+        cprintf<CPK::a>("rv %lu c %d\n", rv, c);
         cprintf<CPK::CTRLC2>("rv %lu c %d\n", rv, c);
         cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
         // You can probably guess success == true and rv = 0,
@@ -1556,6 +1585,20 @@ int main(int argc, char* argv[])
     if(!SetConsoleCtrlHandler((PHANDLER_ROUTINE)&consoleHandler, TRUE)) {
         fprintf(stderr,"INTERNAL ERROR: Could not initialize windows control handler\nContinuing anyway.\nWARNING: CTRL-C will exit the application");
     }
+
+    if(ISATTY(_fileno(stdout))) {
+        oldConsoleOutputCP = GetConsoleOutputCP();
+        SetConsoleOutputCP(CP_UTF8);
+    }
+#if 0
+    // Interactive_readCharFn needs to be updated to work with ReadConsoleW
+    // and WideCharToMultiByte
+    if(ISATTY(_fileno(stdin))) {
+        oldConsoleInputCP = GetConsoleCP();
+        SetConsoleCP(CP_UTF8);
+    }
+#endif
+    atexit(RestoreConsoleCP);
 
     if(argc == 1) {
         exit_usage("No such file!", argv[0]);
