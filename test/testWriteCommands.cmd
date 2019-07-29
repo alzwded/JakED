@@ -1,6 +1,6 @@
 @SET jaked=jaked_debug
 
-@FOR %%i in (test\*.ed) DO @(
+@FOR %%i in (test\?_*.ed) DO @(
     @CALL :COMPARISON %%i
     @IF ERRORLEVEL 1 EXIT /B 1
 )

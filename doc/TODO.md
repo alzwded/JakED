@@ -43,7 +43,7 @@ Display
 -------
 
 + [x] .,.p
-+ [ ] .,.l
++ [x] .,.l
 + [x] .,.pn
 + [x] .,.n
 + [x] zN
@@ -123,6 +123,8 @@ I/O
 ---
 
 + [x] r [F]
+  * [ ] be able to read test\OctrlChars.txt; right now it fails at ^Z (windows EOT? can that even be parsed?)
+    this might be a non-issue, although it would be nice to be able to read everything. Need to check if real ed can read ^D or something like that.
 + [x] e [F]
 + [x] E [F]
 + [x] f FILE

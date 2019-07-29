@@ -1,0 +1,25 @@
+305
+^@^A^B^C^D^E$
+^F^G^H^I^K^L$
+^M^N^O^P^Q^R$
+^S^T^U^V^W^X$
+^Y^Z^[^\^]^^$
+^_ !"#$$
+%&'()*$
++,-./0$
+123456$
+789:;<$
+=>?@AB$
+CDEFGH$
+IJKLMN$
+OPQRST$
+UVWXYZ$
+[\]^_`$
+abcdef$
+ghijkl$
+mnopqr$
+stuvwx$
+yz{|}~$
+^?$
+Above, you can find all characters from 0x00 to 0x7f. Higher bytes are printed as-is for unicode reasons.$
+Here's some unicode: șț§$

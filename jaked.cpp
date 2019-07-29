@@ -451,6 +451,68 @@ namespace CommandsImpl {
         return Q(range, tail);
     }
 
+    void l(Range r, std::string tail)
+    {
+        int first = std::max(1, r.first);
+        int lineNumber = first;
+        int second = std::max(1, r.second) - first + 1;
+        auto i = g_state.swapfile.head();
+        while(first--) i = i->next();
+        first = r.first;
+        while(i && second--) {
+            std::stringstream ss;
+            if(tail[0] == 'n') {
+                ss << first++ << '\t';
+            }
+            for(auto c : i->text()) {
+                if(isprint((unsigned char)c)) {
+                    if(c == '\t') {
+                        ss << "\\t";
+                    } else if(c == '\n') {
+                        ss << "\\n";
+                    } else {
+                        ss << c;
+                    }
+                } else {
+                    switch(c) {
+                    case 0:     ss << "^@"; break;
+                    case 1: case 2: case 3: case 4: case 5:
+                    case 6: case 7: case 8: case 9: case 10:
+                    case 11: case 12: case 13: case 14: case 15:
+                    case 16: case 17: case 18: case 19: case 20:
+                    case 21: case 22: case 23: case 24: case 25:
+                    case 26: 
+                                ss << '^' << (char)((int)'A' + c - 1);
+                                break;
+                    case 27:    ss << "^["; break;
+                    case 28:    ss << "^\\"; break;
+                    case 29:    ss << "^]"; break;
+                    case 30:    ss << "^^"; break;
+                    case 31:    ss << "^_"; break;
+                    case 0x7f:  ss << "^?"; break;
+                    default: {
+                                 // breaks unicode
+#if 0
+                               char buf[4];
+                               sprintf(buf, "%X", (int)c);
+                               ss << "\\x" << c;
+                               break;
+#else
+                               ss << c;
+#endif
+                             }
+                    }
+                }
+            }
+            ss << '$' << std::endl;
+            i = i->next();
+            g_state.writeStringFn(ss.str());
+            if(CtrlC()) return;
+        }
+        g_state.line = r.second;
+    }
+
+
     void p(Range r, std::string tail)
     {
         int first = std::max(1, r.first);
@@ -963,6 +1025,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 's', &CommandsImpl::s },
     { 'x', &CommandsImpl::x },
     { 'y', &CommandsImpl::y },
+    { 'l', &CommandsImpl::l },
 };
 
 void exit_usage(char* msg, char* argv0)

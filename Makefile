@@ -32,6 +32,7 @@ jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
 	cmd /c test\testWriteCommands.cmd
+	cmd /c test\testStdoutCommands.cmd
 	nmake /NOLOGO sal
 
 sal:
