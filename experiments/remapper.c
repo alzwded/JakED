@@ -112,7 +112,7 @@ int main(void) {
     //FILE* f = tmpfile();
     FILE* f = fopen("mem.tmp", "w+");
     HANDLE h = (HANDLE)(_get_osfhandle(_fileno(f)));
-    SIZE_T qwLargePageMinimum = 32;//1024 * 64;
+    SIZE_T qwLargePageMinimum = 1024;//1024 * 64;
     SIZE_T increment = 1;
 
     SIZE_T size = GetNextIncrement(qwLargePageMinimum, increment);
