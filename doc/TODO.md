@@ -55,6 +55,20 @@ Misc
 ----
 
 + [ ] u, see [design document](UndoAndSwapFile.md)
+  * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
+    ```
+    undo:       pPrevUndo 8 pUndoCmd1
+    ...
+    pPrevUndo:  0         8 pUndoCmd0       ; e.g. last available undo
+    ...
+    pUndoCmd1:  pLines    4 "1,3c"
+    pLines:     0         2 "hi"
+    pUndoCmd0:  pLines0   2 "1d"
+    pLines0:    0         2 "ho"
+    ...
+
+    ```
+    Linking a new undo command links the new subhead to the previous subhead and creates the new undo command line + additional lines. Invoking undo "pops" the subhead and points the global undo register to the previous subhead.
 + [x] P
 + [x] H
 + [x] h
@@ -90,7 +104,7 @@ Commands
   * [x] On w/W, buffer is cleared and re-initialized with current cut buffer
   * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [x] on clean exit, delete file
-
+  * [ ] Use MapViewOfFile and CreateFileMapping instead of CRT file I/O because I/O is through the roof. CreateFileMapping can be used to grow the swap file as needed (say, `4k -> 8k -> ... 2**27 -> 2 * 2**27 -> 3 * 2**27 ...`; `2**27` should be 100MB or so). MapViewOfFile should be done chunked, because UnmapViewOfFile will schedule changed pages for commit (async) which would keep it pretty fresh. In this implementation, the "no I/O can be performed" scenario can cause it to work with swapfile backed memory (i.e. normal memory) while keeping the same API. Might work on this once I have more test coverage, since the slow CRTIO implementation at least works for now. See [remapper](../experiments/remapper.c)
 + [x] .,.c
 + [x] .,.d
 + [x] test registers get clobbered by d
