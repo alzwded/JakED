@@ -156,3 +156,22 @@
                 ASSERT(tail == "3");
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(PercentCommaIsASyntaxError) {
+            TEST_SETUP() {
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                char command;
+                std::string tail;
+                std::exception_ptr exceptionRaised;
+                try {
+                    std::tie(r, command, tail) = ParseCommand("%,$y");
+                } catch(JakEDException& er) {
+                    exceptionRaised = std::current_exception();
+                }
+                ASSERT(!!exceptionRaised);
+            } TEST_RUN_END();
+        } END_TEST();

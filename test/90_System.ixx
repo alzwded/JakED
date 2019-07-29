@@ -1,3 +1,33 @@
+        struct WriteFn {
+            std::shared_ptr<size_t> state;
+            std::vector<std::optional<std::string>> lines;
+            WriteFn(decltype(lines) const& lines_ = {})
+                : state(new size_t{0})
+                , lines(lines_)
+            {}
+            void operator()(std::string s) {
+                if(*state >= lines.size()) {
+                    fprintf(stderr, "    ....Unexpected string: %s", s.c_str());
+                    ASSERT(!"Read too much!");
+                    return;
+                }
+                if(lines[*state]) {
+                    if(s != (*lines[*state]+"\n")) {
+                        fprintf(stderr, "    ....Expected: %s\n", lines[*state]->c_str());
+                        fprintf(stderr, "    ....Got: %s", s.c_str());
+                    }
+                    ASSERT(s == (*lines[*state]+"\n"));
+                }
+                ++(*state);
+            }
+            void Assert() const {
+                if(*state != lines.size()) {
+                    fprintf(stderr, "    ....Expected to have read %zd\n", lines.size());
+                    fprintf(stderr, "    ....Actually read %zd\n", *state);
+                }
+                ASSERT(*state == lines.size());
+            }
+        };
 
         SUITE_SETUP() {
             // FIXME refactor this out
@@ -861,5 +891,94 @@ Line 1
                 }
                 ASSERT(g_state.dirty);
                 ASSERT( (*numLinesRead) == 1);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(d0x1x) {
+            WriteFn fn({
+                    "2",
+                    "3",
+                    "12",
+                    "Line 1",
+                    "Line 1",
+                    "Line 2",
+                    "Line 2",
+                    "Line 3",
+                });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(1,2d
+0x
+.=
+1x
+.=
+=
+1,5p
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(g_state.dirty);
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(y0x12x) {
+            WriteFn fn({
+                    "2",
+                    "14",
+                    "14",
+                    "Line 2",
+                    "Line 3",
+                    "Line 1",
+                    "Line 2",
+                    "Line 3",
+                    "Line 4",
+                    "Line 5",
+                    "Line 6",
+                    "Line 7",
+                    "Line 8",
+                    "Line 9",
+                    "Line 10",
+                    "Line 2",
+                    "Line 3",
+                });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(2,3y
+0x
+.=
+12x
+.=
+=
+1,$p
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(g_state.dirty);
+                fn.Assert();
             } TEST_RUN_END();
         } END_TEST();

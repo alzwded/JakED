@@ -6,7 +6,7 @@ Navigation
 
 + [x] N
 + [x] ,
-+ [ ] % means ,
++ [x] % means ,
 + [x] $
 + [x] .
 + [x] offsets
@@ -100,17 +100,24 @@ Commands
 *Cut buffer, register update*:
 
 + [x] cut buffer
++ [x] .,.c
++ [x] .,.d
++ [x] test registers get clobbered by d
++ [x] .,.y
++ [x] .x
++ [x] test x preserves registers like i
+
+Swapfile
+--------
+
 + [x] swap file: see [design document](UndoAndSwapFile.md)
   * [x] On w/W, buffer is cleared and re-initialized with current cut buffer
   * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [x] on clean exit, delete file
   * [ ] Use MapViewOfFile and CreateFileMapping instead of CRT file I/O because I/O is through the roof. CreateFileMapping can be used to grow the swap file as needed (say, `4k -> 8k -> ... 2**27 -> 2 * 2**27 -> 3 * 2**27 ...`; `2**27` should be 100MB or so). MapViewOfFile should be done chunked, because UnmapViewOfFile will schedule changed pages for commit (async) which would keep it pretty fresh. In this implementation, the "no I/O can be performed" scenario can cause it to work with swapfile backed memory (i.e. normal memory) while keeping the same API. Might work on this once I have more test coverage, since the slow CRTIO implementation at least works for now. See [remapper](../experiments/remapper.c)
-+ [x] .,.c
-+ [x] .,.d
-+ [x] test registers get clobbered by d
-+ [ ] .,.y
-+ [ ] .x
-+ [ ] test x preserves registers like i
++ [x] large file support (i.e. use getfpos and setfpos and update header to be 64bit) – it's sort-of there, but uses a whole lotta disk space
+  * [ ] command line flag for no swap file and env var to set swap file default directory
++ [x] rewrite swap file to be a giant linked list + a bunch of registers
 
 I/O
 ---
@@ -148,8 +155,5 @@ Internals, Externals and Other Tasks
 + [ ] jaked --version
 + [ ] some nice html documentation, like `ed`'s man page
 + [ ] read windows-native UTF16 files (`rutf16 somefile?`)
-+ [x] large file support (i.e. use getfpos and setfpos and update header to be 64bit) – it's sort-of there, but uses a whole lotta disk space
-  * [ ] command line flag for no swap file and env var to set swap file default directory
-+ [ ] rewrite swap file to be a giant linked list + a bunch of registers
 + [ ] don't crash if file can't be read
 + [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long

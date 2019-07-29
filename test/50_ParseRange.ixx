@@ -360,11 +360,25 @@
                 Range r;
                 int i = 0;
                 std::tie(r, i) = ParseRange("/2/-,//+d", i);
-                printf("%d %d\n", r.first, r.second);
                 ASSERT(g_state.line == 1);
                 ASSERT(r.first == 2);
                 ASSERT(r.second == 4);
                 ASSERT(i == 8);
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(ParsePercent) {
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Range r;
+                int i = 0;
+                std::tie(r, i) = ParseRange("%s/a/b/g", i);
+                ASSERT(g_state.line == 1);
+                ASSERT(r.first == 1);
+                ASSERT(r.second == 10);
+                ASSERT(i == 1);
             } TEST_RUN_END();
         } END_TEST();
 

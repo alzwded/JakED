@@ -778,7 +778,7 @@ namespace CommandsImpl {
             if(CtrlC()) return;
         }
 
-        if(!it) throw JakEDException("Invalid range");
+        if(!it || idx > 0) throw JakEDException("Invalid range");
 
         // TODO "s\0" requires storing the second part somewhere
 
@@ -866,6 +866,75 @@ namespace CommandsImpl {
         }
     }
 
+    void x(Range r, std::string)
+    {
+        auto it = g_state.swapfile.head();
+        int idx = r.second;
+        while(idx-- > 0 && it) {
+            it = it->next();
+            if(CtrlC()) return;
+        }
+
+        if(!it || idx > 0) throw JakEDException("Invalid range");
+
+        auto cutBuffer = g_state.swapfile.cut();
+        auto nextOne = it->next();
+        int lines = 0;
+        it->link(cutBuffer);
+        while(cutBuffer) {
+            auto line = g_state.swapfile.line(cutBuffer->text());
+            line->link(nextOne);
+            it->link(line);
+            it = line;
+            cutBuffer = cutBuffer->next();
+            ++lines;
+            if(CtrlC()) break;
+        }
+
+        if(lines) {
+            std::stringstream undoBuffer;
+            undoBuffer << r.second + 1 << "," << r.second + lines << "d";
+            auto line = g_state.swapfile.line(undoBuffer.str());
+            g_state.swapfile.undo(line);
+
+            g_state.nlines += lines;
+
+            g_state.line = r.second + lines;
+
+            g_state.dirty = true;
+        }
+    }
+
+    void y(Range r, std::string)
+    {
+        if(r.first < 1) throw JakEDException("Invalid range");
+        size_t linesYanked = 0;
+        auto it = g_state.swapfile.head();
+        auto idx = r.first;
+        while(idx-- > 1
+                && it->next())
+        {
+            it = it->next();
+        }
+
+        auto cutHead = g_state.swapfile.line("");
+        auto cutOrigin = cutHead->Copy();
+        // it->next() is where we start yanking
+        it = it->next();
+        idx = r.second - r.first + 1;
+        while(idx-- > 0 && it) {
+            auto line = g_state.swapfile.line(it->text());
+            cutHead->link(line);
+            cutHead = line;
+            ++linesYanked;
+            it = it->next();
+            if(CtrlC()) break;
+        }
+        if(linesYanked) {
+            g_state.swapfile.cut(cutOrigin->next());
+            g_state.line = r.second;
+        }
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -892,6 +961,8 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'd', &CommandsImpl::d },
     { 'j', &CommandsImpl::j },
     { 's', &CommandsImpl::s },
+    { 'x', &CommandsImpl::x },
+    { 'y', &CommandsImpl::y },
 };
 
 void exit_usage(char* msg, char* argv0)
@@ -1229,6 +1300,8 @@ std::tuple<Range, int> ParseRange(std::string const& s, int i)
     i = SkipWS(s, i);
     int left = 0;
     switch(s[i]) {
+        case '%':
+            return std::make_tuple(Range::R(1, Range::Dollar()), i + 1);
         case ';':
             return ParseFromComma(Range::Dot(), s, i, true);
         case '$':
