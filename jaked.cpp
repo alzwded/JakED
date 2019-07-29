@@ -187,7 +187,7 @@ int Interactive_readCharFn()
                 &buf,
                 400,
                 &rv,
-                NULL); // maybe use this CONSOLE_READCONSOLE_CONTROL thing to support ^V<literal>? I doubt it, though
+                NULL); // maybe use this CONSOLE_READCONSOLE_CONTROL thing to support ^V<literal>? Apparently so, the mask needs to contain 1<<('V'-'A') + read CTRL from dwControlKeyState and then I can call ReadConsoleInput and pick up whatever's next, and inject it into the rest of the buffer. Yay!
         auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, 20, NULL, NULL);
         buf2[cchbuf] = '\0';
         printf("as utf8: %s\n", buf2);
