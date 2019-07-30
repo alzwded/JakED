@@ -27,6 +27,12 @@ constexpr int EnabledKeys[] = {
 >>>MACROS<<<
 };
 
+template<CPK cpk>
+struct IsKeyEnabled
+{
+    static constexpr bool value = EnabledKeys[static_cast<int>(cpk)];
+};
+
 constexpr const char* KeyTranslation[] = {
 >>>TRANSLATIONS<<<
 };
@@ -42,7 +48,7 @@ inline void __cprintf(_In_z_ _Printf_format_string_params_(1) const char (&forma
 template<CPK key, typename... Args>
 inline void cprintf(_In_z_ _Printf_format_string_params_(1) const char* const format, Args... args)
 {
-    if constexpr(EnabledKeys[static_cast<int>(key)]) {
+    if constexpr(IsKeyEnabled<key>::value) {
 #pragma warning(push)
 #pragma warning(disable: 6386 6387 6011)
         auto N = strlen(format);
