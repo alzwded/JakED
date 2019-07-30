@@ -213,19 +213,26 @@ struct ConsoleReader {
             // maybe read something to the extent of a full line? ReadConsoleW returns after \n
             WCHAR buf[256];
             CHAR buf2[256 * 5];
+#ifdef CTRLV
             CONSOLE_READCONSOLE_CONTROL lpCRC;
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
             lpCRC.nLength = sizeof(CONSOLE_READCONSOLE_CONTROL);
             lpCRC.nInitialChars = 0;
             lpCRC.dwCtrlWakeupMask = 1 << ('V' - 'A' + 1);
             lpCRC.dwControlKeyState = 0;
+#endif
 
             auto success = ReadConsoleW(
                     TheConsoleStdin,
                     &buf,
                     sizeof(buf)/sizeof(buf[0]) - 1,
                     &rv,
-                    &lpCRC);
+#ifdef CTRLV
+                    &lpCRC
+#else
+                    NULL
+#endif
+                    );
             buf[sizeof(buf) / sizeof(buf[0]) - 1] = L'\0';
             if(GetLastError() != 0) {
                 cprintf<CPK::CTRLC>("ERROR_OPERATION_ABORTED is %lu\n", ERROR_OPERATION_ABORTED);
@@ -239,7 +246,8 @@ struct ConsoleReader {
                     fprintf(stderr, "\\x%04X", buf[i]);
                 fprintf(stderr, "\n");
             }
-            cprintf<CPK::CTRLC>("CRC: %d %d %X %X\n", lpCRC.nLength, lpCRC.nInitialChars, lpCRC.dwCtrlWakeupMask, lpCRC.dwControlKeyState);
+#ifdef CTRLV
+            cprintf<CPK::CTRLC>("CRC: %u %u %X %X\n", lpCRC.nLength, lpCRC.nInitialChars, lpCRC.dwCtrlWakeupMask, lpCRC.dwControlKeyState);
             cprintf<CPK::CTRLC>("Explanation of last flag:\n"
                     "\tCAPSLOCK_ON %X\n"
                     "\tENHANCED_KEY %X\n"
@@ -259,6 +267,7 @@ struct ConsoleReader {
                     RIGHT_CTRL_PRESSED,
                     SCROLLLOCK_ON,
                     SHIFT_PRESSED);
+#endif
             // You can probably guess success == true and rv = 0,
             // but w/e. If that happened...
             if(GetLastError() == ERROR_OPERATION_ABORTED) {
@@ -296,7 +305,7 @@ struct ConsoleReader {
                 return EOF;
             }
 
-#if 1
+#ifdef CTRLV
             //printf("%X\n", buf[rv - 1]);
             if(rv >= 1 && buf[rv - 1] == 0x16 &&
                (lpCRC.dwControlKeyState & LEFT_CTRL_PRESSED))
@@ -327,7 +336,7 @@ struct ConsoleReader {
                     buffer.clear();
                     return '\0';
                   }
-                  auto success = ReadConsoleInput(TheConsoleStdin,
+                  success = ReadConsoleInput(TheConsoleStdin,
                           &ir,
                           1,
                           &rv);
