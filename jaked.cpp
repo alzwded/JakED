@@ -24,6 +24,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <cstdarg>
 #include <atomic>
 #include <optional>
+#include <deque>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -144,127 +145,246 @@ struct JakEDException : public std::runtime_error
     {}
 };
 
+// FIXME refactor these somehow to be inside ConsoleReader
+//       the main loop now clears these in case it picked up
+//       on CTRL_C_EVENT before the console reader
 static int lastWasD = 0;
 static char lastChar = '\0';
-int Interactive_readCharFn()
-// WOW, this is a long story...
-{
-    if(lastWasD == 2) {
-        lastWasD = 0;
-        return lastChar;
-    }
-    // So, if there is no STDIN, just return EOF
-    if(feof(stdin)) {
-        cprintf<CPK::CTRLC>("stdin was closed somehow\n");
-        return EOF;
-    }
-    // Next, if we're not connected to a terminal,
-    // use fgetc(stdin) like normal. Behaves in the
-    // expected way.
-    if(!ISATTY(fileno(stdin))) {
-        return fgetc(stdin);
-    }
-    // Aaaaand here it gets interesting.
-    char c = (char)0;
-    DWORD rv = 0;
-    do {
-        // Clear GetLastError() because as we know nobody
-        // ever does.
-        SetLastError(0);
-        // This and ReadFileA are those functions which
-        // actually get an ERROR_OPERATION_ABORTED error
-        // if they are interrupted (as defined for ^C and ^BRK)
-        cprintf<CPK::CTRLC2>("reading\n");
-        // FIXME should use ReadConsoleW and WideCharToMultiByte(UTF8)
-        //       and stream characters in to support unicode input
-        // Output works via SetConsoleOutputCP
-#if 0
-        // maybe read something to the extent of a full line? ReadConsoleW returns after \n
-        wchar_t buf[400];
-        char buf2[1600];
-        auto success = ReadConsoleW(
-                TheConsoleStdin,
-                &buf,
-                400,
-                &rv,
-                NULL); // maybe use this CONSOLE_READCONSOLE_CONTROL thing to support ^V<literal>? Apparently so, the mask needs to contain 1<<('V'-'A') + read CTRL from dwControlKeyState and then I can call ReadConsoleInput and pick up whatever's next, and inject it into the rest of the buffer. Yay!
-        auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, 20, NULL, NULL);
-        buf2[cchbuf] = '\0';
-        printf("as utf8: %s\n", buf2);
-        // ^---- this is printed correctly as UTF8
-        printf("as utf8 bis:"); for(auto p = buf2; *p; printf("%X", *p++)); printf("\n");
-        // ^---- this needs to be streamed
-        c = buf2[0];
-#else
-        auto success = ReadConsoleA(
-                TheConsoleStdin,
-                &c,
-                1,
-                &rv,
-                NULL);
-#endif
-        cprintf<CPK::a>("rv %lu c %d\n", rv, c);
-        cprintf<CPK::CTRLC2>("rv %lu c %d\n", rv, c);
-        cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
-        // You can probably guess success == true and rv = 0,
-        // but w/e. If that happened...
-        if(GetLastError() == ERROR_OPERATION_ABORTED) {
-            lastWasD = 0;
-            lastChar = (char)0;
+static std::deque<int> buffer = {};
+struct ConsoleReader {
+
+    int operator()()
+    // WOW, this is a long story...
+    {
+        while(!buffer.empty()) {
+            auto c = buffer.front();
+            buffer.pop_front();
+
+            if(lastWasD == 2) {
+                lastWasD = 0;
+                return lastChar;
+            }
+    
+            if(c == (char)10 && lastWasD == 1) {
+                lastWasD = 0;
+                return c;
+            }
+    
+            if(lastWasD == 1 && c != (char)10) {
+                lastWasD = 2;
+                lastChar = c;
+                return (char)13;
+            }
+    
+            // OF COURSE we're on windows and <CR> == [0xD, 0xA]
+            // Let's pretend we're always ignoring that character.
+            if(c == (char)13) {
+                cprintf<CPK::CTRLC2>("char 13\n");
+                lastWasD = true;
+                continue;
+            }
+
+            return c;
+        }
+        // So, if there is no STDIN, just return EOF
+        if(feof(stdin)) {
+            cprintf<CPK::CTRLC>("stdin was closed somehow\n");
+            return EOF;
+        }
+        // Next, if we're not connected to a terminal,
+        // use fgetc(stdin) like normal. Behaves in the
+        // expected way.
+        if(!ISATTY(fileno(stdin))) {
+            return fgetc(stdin); // maybe if I use ReadFileW here, I can process ^Z?
+        }
+        // Aaaaand here it gets interesting.
+        char c = (char)0;
+        DWORD rv = 0;
+        do {
             // Clear GetLastError() because as we know nobody
             // ever does.
             SetLastError(0);
-            // Set a different interrupt flag because otherwise we're
-            // randomly racing with the interrupt thread. We'll wait
-            // for the consoleHandler thread later.
-            ctrlint = true;
-        }
-        if(GetLastError() != 0) {
-            cprintf<CPK::CTRLC2>("GLE: %lu\n", GetLastError());
-        }
-        // In the event that ReadConsoleA fails (I never saw it fail yet)
-        // then report some error and exit.
-        if(!success) {
-            fprintf(stderr, "ReadConsoleA failed with %lu\n", GetLastError());
-            return EOF;
-        }
+            // This and ReadFileA are those functions which
+            // actually get an ERROR_OPERATION_ABORTED error
+            // if they are interrupted (as defined for ^C and ^BRK)
+            cprintf<CPK::CTRLC2>("reading\n");
+            // maybe read something to the extent of a full line? ReadConsoleW returns after \n
+            WCHAR buf[256];
+            CHAR buf2[256 * 5];
+            CONSOLE_READCONSOLE_CONTROL lpCRC;
+            memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
+            lpCRC.nLength = sizeof(CONSOLE_READCONSOLE_CONTROL);
+            lpCRC.nInitialChars = 0;
+            lpCRC.dwCtrlWakeupMask = 1 << 27;
+            lpCRC.dwControlKeyState = 0;
 
-        if(c == (char)10 && lastWasD == 1) {
-            lastWasD = 0;
-            return c;
-        }
+            auto success = ReadConsoleW(
+                    TheConsoleStdin,
+                    &buf,
+                    sizeof(buf)/sizeof(buf[0]),
+                    &rv,
+                    NULL/*&lpCRC*/);
+            if(GetLastError() != 0) {
+                cprintf<CPK::CTRLC>("ERROR_OPERATION_ABORTED is %lu\n", ERROR_OPERATION_ABORTED);
+                cprintf<CPK::CTRLC>("ERROR_INVALID_ARGUMENT is 87\n");
+                cprintf<CPK::CTRLC2>("GLE: %lu\n", GetLastError());
+            }
+            cprintf<CPK::CTRLC>("CRC: %d %d %X %X\n", lpCRC.nLength, lpCRC.nInitialChars, lpCRC.dwCtrlWakeupMask, lpCRC.dwControlKeyState);
 
-        if(lastWasD == 1 && c != (char)10) {
-            lastWasD = 2;
-            lastChar = c;
-            return (char)13;
-        }
+            cprintf<CPK::a>("rv %lu c %d\n", rv, c);
+            cprintf<CPK::CTRLC2>("rv %lu c %d\n", rv, c);
+            cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
+            // You can probably guess success == true and rv = 0,
+            // but w/e. If that happened...
+            if(GetLastError() == ERROR_OPERATION_ABORTED) {
+                lastWasD = 0;
+                lastChar = (char)0;
+                // Clear GetLastError() because as we know nobody
+                // ever does.
+                SetLastError(0);
+                // Set a different interrupt flag because otherwise we're
+                // randomly racing with the interrupt thread. We'll wait
+                // for the consoleHandler thread later.
+                ctrlint = true;
 
-        // OF COURSE we're on windows and <CR> == [0xD, 0xA]
-        // Let's pretend we're always ignoring that character.
-        if(c == (char)13) {
-            cprintf<CPK::CTRLC2>("char 13\n");
-            lastWasD = true;
-            continue;
-        }
+                // Okay, if ctrlc is triggered, return some BS character.
+                // The caller will handle the flag.
+                cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
+                buffer.clear();
+                return '\0';
+            }
 
-        cprintf<CPK::CTRLC>("    read a %x\n", c);
-        // Okay, if ctrlc is triggered, return some BS character.
-        // The caller will handle the flag.
-        if(CtrlC()) {
-            cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
-            return '\0';
-        }
-        // If STDIN got closed, return EOF.
-        if(feof(stdin)) {
-            cprintf<CPK::CTRLC>("lost stdin!!! my magic didn't work\n");
-            return EOF;
-        }
-        cprintf<CPK::CTRLC>("read %c\n", c);
-        // Finally, return the character
-        return c;
-    } while(1);
-}
+            if(GetLastError() == 0 && rv > 0) {
+                auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, sizeof(buf2) - 1, NULL, NULL);
+                buf2[cchbuf] = '\0';
+                for(size_t i = 0; i < cchbuf; ++i) {
+                    buffer.push_back(buf2[i]);
+                }
+            }
+
+            // In the event that ReadConsoleA fails (I never saw it fail yet)
+            // then report some error and exit.
+            if(!success) {
+                fprintf(stderr, "ReadConsoleA failed with %lu\n", GetLastError());
+                return EOF;
+            }
+
+#if 1
+            if(false &&
+                    //GetLastError() != 0 &&
+               !(lpCRC.dwCtrlWakeupMask & LEFT_CTRL_PRESSED))
+            {
+              if(!(lpCRC.dwCtrlWakeupMask & RIGHT_CTRL_PRESSED)
+              && !(lpCRC.dwCtrlWakeupMask & SHIFT_PRESSED)
+              && !(lpCRC.dwCtrlWakeupMask & LEFT_ALT_PRESSED)
+              && !(lpCRC.dwCtrlWakeupMask & ENHANCED_KEY))
+              {
+                INPUT_RECORD ir;
+
+                do {
+                  if(CtrlC()) {
+                    lastWasD = 0;
+                    lastChar = (char)0;
+                    // Clear GetLastError() because as we know nobody
+                    // ever does.
+                    SetLastError(0);
+                    // Set a different interrupt flag because otherwise we're
+                    // randomly racing with the interrupt thread. We'll wait
+                    // for the consoleHandler thread later.
+                    ctrlint = true;
+
+                    // Okay, if ctrlc is triggered, return some BS character.
+                    // The caller will handle the flag.
+                    cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
+                    buffer.clear();
+                    return '\0';
+                  }
+                  auto success = ReadConsoleInput(TheConsoleStdin,
+                          &ir,
+                          1,
+                          &rv);
+                  if(GetLastError() == ERROR_OPERATION_ABORTED) {
+                    lastWasD = 0;
+                    lastChar = (char)0;
+                    // Clear GetLastError() because as we know nobody
+                    // ever does.
+                    SetLastError(0);
+                    // Set a different interrupt flag because otherwise we're
+                    // randomly racing with the interrupt thread. We'll wait
+                    // for the consoleHandler thread later.
+                    ctrlint = true;
+
+                    // Okay, if ctrlc is triggered, return some BS character.
+                    // The caller will handle the flag.
+                    cprintf<CPK::CTRLC>("from ctrlc, returning NUL\n");
+                    buffer.clear();
+                    return '\0';
+                  }
+                  // don't care about non key presses
+                  if(ir.EventType != KEY_EVENT) continue;
+
+                  auto ker = ir.Event.KeyEvent;
+
+                  // don't care about key up
+                  if(!ker.bKeyDown) continue;
+
+                  // maybe literal input
+                  if(ker.dwControlKeyState & LEFT_CTRL_PRESSED) {
+                    switch(ker.wVirtualScanCode)
+                    {
+                    case '@': buffer.push_back('\0'); return operator()();
+                    case 'A': case 'B': case 'C': case 'D': case 'E':
+                    case 'F': case 'G': case 'H': case 'I': case 'J':
+                    case 'K': case 'L': case 'M': case 'N': case 'O':
+                    case 'P': case 'Q': case 'R': case 'S': case 'T':
+                    case 'U': case 'V': case 'W': case 'X': case 'Y':
+                    case 'Z':
+                              buffer.push_back(ker.wVirtualScanCode - 'A' + 1);
+                              return operator()();
+                    case '[': buffer.push_back(27); return operator()();
+                    case '\\': buffer.push_back(28); return operator()();
+                    case ']': buffer.push_back(29); return operator()();
+                    case '^': buffer.push_back(30); return operator()();
+                    case '_': buffer.push_back(31); return operator()();
+                    case '?': buffer.push_back(0x7f); return operator()();
+                    default:
+                              break;
+                    }
+                  }
+
+                  WCHAR theChar = ker.uChar.UnicodeChar;
+
+                  auto cchbuf = WideCharToMultiByte(
+                          CP_UTF8,
+                          0,
+                          &theChar,
+                          1,
+                          buf2, 
+                          8,
+                          NULL,
+                          NULL);
+
+                  for(size_t i = 0; i < cchbuf; ++i) {
+                    buffer.push_back(buf2[i]);
+                  }
+                  return operator()();
+                } while(1);
+              }
+            }
+#endif
+            cprintf<CPK::CTRLC>("    read a %x\n", c);
+            // If STDIN got closed, return EOF.
+            if(feof(stdin)) {
+                cprintf<CPK::CTRLC>("lost stdin!!! my magic didn't work\n");
+                buffer.push_back(EOF);
+                return operator()();
+            }
+            cprintf<CPK::CTRLC>("read %c\n", c);
+            // Finally, return the character
+            return operator()();
+        } while(1);
+    }
+} Interactive_readCharFn;
 
 void Interactive_writeStringFn(std::string const& s)
 {
@@ -1492,6 +1612,7 @@ void Loop()
             FlushConsoleInputBuffer(TheConsoleStdin);
             lastWasD = false;
             lastChar = (char)0;
+            buffer.clear();
             fprintf(stdout, "\n");
         }
         if(CtrlC()) {
@@ -1528,8 +1649,9 @@ void Loop()
                     ss << c;
                 }
                 // If we got interrupted, start a new loop
-                if(CtrlC()) break;
-                cprintf<CPK::CTRLC>("Interrupted after read loop\n");
+                if(CtrlC()) {
+                    cprintf<CPK::CTRLC>("Interrupted after read loop\n");
+                }
                 auto s = ss.str();
 
                 if( ii == EOF && s.empty()) {
@@ -1590,14 +1712,12 @@ int main(int argc, char* argv[])
         oldConsoleOutputCP = GetConsoleOutputCP();
         SetConsoleOutputCP(CP_UTF8);
     }
-#if 0
     // Interactive_readCharFn needs to be updated to work with ReadConsoleW
     // and WideCharToMultiByte
     if(ISATTY(_fileno(stdin))) {
         oldConsoleInputCP = GetConsoleCP();
         SetConsoleCP(CP_UTF8);
     }
-#endif
     atexit(RestoreConsoleCP);
 
     if(argc == 1) {
@@ -1614,7 +1734,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    g_state.readCharFn = &Interactive_readCharFn;
+    g_state.readCharFn = Interactive_readCharFn;
     g_state.writeStringFn = &Interactive_writeStringFn;
 
     std::string file = argv[1];
