@@ -184,6 +184,8 @@ struct ConsoleReader {
                 continue;
             }
 
+            cprintf<CPK::CTRLC>("yielding %c [%X] out of %zd left\n", c, c, buffer.size());
+
             return c;
         }
         // So, if there is no STDIN, just return EOF
@@ -215,25 +217,50 @@ struct ConsoleReader {
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
             lpCRC.nLength = sizeof(CONSOLE_READCONSOLE_CONTROL);
             lpCRC.nInitialChars = 0;
-            lpCRC.dwCtrlWakeupMask = 1 << 27;
+            lpCRC.dwCtrlWakeupMask = 1 << ('V' - 'A' + 1);
             lpCRC.dwControlKeyState = 0;
 
             auto success = ReadConsoleW(
                     TheConsoleStdin,
                     &buf,
-                    sizeof(buf)/sizeof(buf[0]),
+                    sizeof(buf)/sizeof(buf[0]) - 1,
                     &rv,
-                    NULL/*&lpCRC*/);
+                    &lpCRC);
+            buf[sizeof(buf) / sizeof(buf[0]) - 1] = L'\0';
             if(GetLastError() != 0) {
                 cprintf<CPK::CTRLC>("ERROR_OPERATION_ABORTED is %lu\n", ERROR_OPERATION_ABORTED);
                 cprintf<CPK::CTRLC>("ERROR_INVALID_ARGUMENT is 87\n");
                 cprintf<CPK::CTRLC2>("GLE: %lu\n", GetLastError());
             }
             cprintf<CPK::CTRLC>("CRC: %d %d %X %X\n", lpCRC.nLength, lpCRC.nInitialChars, lpCRC.dwCtrlWakeupMask, lpCRC.dwControlKeyState);
-
-            cprintf<CPK::a>("rv %lu c %d\n", rv, c);
-            cprintf<CPK::CTRLC2>("rv %lu c %d\n", rv, c);
-            cprintf<CPK::CTRLC>("rv %lu c %d\n", rv, c);
+            cprintf<CPK::CTRLC>("Explanation of last flag:\n"
+                    "\tCAPSLOCK_ON %X\n"
+                    "\tENHANCED_KEY %X\n"
+                    "\tLEFT_ALT_PRESSED %X\n"
+                    "\tLEFT_CTRL_PRESSED %X\n"
+                    "\tNUMLOCK_ON %X\n"
+                    "\tRIGHT_ALT_PRESSED %X\n"
+                    "\tRIGHT_CTRL_PRESSED %X\n"
+                    "\tSCROLLLOCK_ON %X\n"
+                    "\tSHIFT_PRESSED %X\n",
+                    CAPSLOCK_ON,
+                    ENHANCED_KEY,
+                    LEFT_ALT_PRESSED,
+                    LEFT_CTRL_PRESSED,
+                    NUMLOCK_ON,
+                    RIGHT_ALT_PRESSED,
+                    RIGHT_CTRL_PRESSED,
+                    SCROLLLOCK_ON,
+                    SHIFT_PRESSED);
+            //cprintf<CPK::a>("rv %lu c %ls\n", rv, buf);
+            //cprintf<CPK::CTRLC2>("rv %lu c %ls\n", rv, buf);
+            //cprintf<CPK::CTRLC>("rv %lu c %ls\n", rv, buf);
+            if constexpr(__CPRINTF_CTRLC) {
+                fprintf(stderr, "Read %lu chars: ", rv);
+                for(size_t i = 0; i < rv; ++i)
+                    fprintf(stderr, "\\x%04X", buf[i]);
+                fprintf(stderr, "\n");
+            }
             // You can probably guess success == true and rv = 0,
             // but w/e. If that happened...
             if(GetLastError() == ERROR_OPERATION_ABORTED) {
@@ -260,6 +287,7 @@ struct ConsoleReader {
                 for(size_t i = 0; i < cchbuf; ++i) {
                     buffer.push_back(buf2[i]);
                 }
+                cprintf<CPK::CTRLC>("As utf8: %s\n", buf2);
             }
 
             // In the event that ReadConsoleA fails (I never saw it fail yet)
@@ -270,15 +298,16 @@ struct ConsoleReader {
             }
 
 #if 1
-            if(false &&
-                    //GetLastError() != 0 &&
-               !(lpCRC.dwCtrlWakeupMask & LEFT_CTRL_PRESSED))
+            printf("%X\n", buf[rv - 1]);
+            if(rv >= 1 && buf[rv - 1] == 0x16 &&
+               (lpCRC.dwControlKeyState & LEFT_CTRL_PRESSED))
             {
-              if(!(lpCRC.dwCtrlWakeupMask & RIGHT_CTRL_PRESSED)
-              && !(lpCRC.dwCtrlWakeupMask & SHIFT_PRESSED)
-              && !(lpCRC.dwCtrlWakeupMask & LEFT_ALT_PRESSED)
-              && !(lpCRC.dwCtrlWakeupMask & ENHANCED_KEY))
+              if(!(lpCRC.dwControlKeyState & RIGHT_CTRL_PRESSED)
+              && !(lpCRC.dwControlKeyState & SHIFT_PRESSED)
+              && !(lpCRC.dwControlKeyState & LEFT_ALT_PRESSED)
+              && !(lpCRC.dwControlKeyState & ENHANCED_KEY))
               {
+                buffer.pop_back(); // pop 0x16
                 INPUT_RECORD ir;
 
                 do {
@@ -328,11 +357,21 @@ struct ConsoleReader {
                   // don't care about key up
                   if(!ker.bKeyDown) continue;
 
+                  cprintf<CPK::CTRLC>("uChar %X\n", ker.uChar.UnicodeChar);
+                  if(!ker.uChar.UnicodeChar
+                          && !(ker.dwControlKeyState & LEFT_CTRL_PRESSED
+                               && ker.wVirtualKeyCode == 0x32))
+                  {
+                      printf("'2' %x %x\n", '2', ker.wVirtualKeyCode);
+                      printf("[   %x]%x\n", 0xDB, 0xDD);
+                      continue;
+                  }
+
                   // maybe literal input
                   if(ker.dwControlKeyState & LEFT_CTRL_PRESSED) {
-                    switch(ker.wVirtualScanCode)
+                    switch(ker.wVirtualKeyCode)
                     {
-                    case '@': buffer.push_back('\0'); return operator()();
+                    case '2': buffer.push_back('\0'); return operator()();
                     case 'A': case 'B': case 'C': case 'D': case 'E':
                     case 'F': case 'G': case 'H': case 'I': case 'J':
                     case 'K': case 'L': case 'M': case 'N': case 'O':
@@ -341,18 +380,24 @@ struct ConsoleReader {
                     case 'Z':
                               buffer.push_back(ker.wVirtualScanCode - 'A' + 1);
                               return operator()();
-                    case '[': buffer.push_back(27); return operator()();
-                    case '\\': buffer.push_back(28); return operator()();
-                    case ']': buffer.push_back(29); return operator()();
-                    case '^': buffer.push_back(30); return operator()();
-                    case '_': buffer.push_back(31); return operator()();
-                    case '?': buffer.push_back(0x7f); return operator()();
+                    case 0xDB: buffer.push_back(27); return operator()();
+                    case 0xDC: buffer.push_back(28); return operator()();
+                    case 0xDD: buffer.push_back(29); return operator()();
+                    case '6': buffer.push_back(30); return operator()();
+                    case 0xBD: buffer.push_back(31); return operator()();
+                    case 0xBF: buffer.push_back(0x7f); return operator()();
                     default:
                               break;
                     }
                   }
 
                   WCHAR theChar = ker.uChar.UnicodeChar;
+                  // echo char
+                  WriteConsoleW(TheConsoleStdin,
+                          &theChar,
+                          1,
+                          &rv,
+                          NULL);
 
                   auto cchbuf = WideCharToMultiByte(
                           CP_UTF8,
@@ -372,14 +417,12 @@ struct ConsoleReader {
               }
             }
 #endif
-            cprintf<CPK::CTRLC>("    read a %x\n", c);
             // If STDIN got closed, return EOF.
             if(feof(stdin)) {
                 cprintf<CPK::CTRLC>("lost stdin!!! my magic didn't work\n");
                 buffer.push_back(EOF);
                 return operator()();
             }
-            cprintf<CPK::CTRLC>("read %c\n", c);
             // Finally, return the character
             return operator()();
         } while(1);
