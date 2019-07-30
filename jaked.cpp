@@ -735,7 +735,7 @@ namespace CommandsImpl {
     void i(Range r, std::string)
     {
         auto pos = r.second;
-        if(pos < 1 || pos >= g_state.nlines) throw JakEDException("Invalid range");
+        if(pos < 1 || pos > g_state.nlines) throw JakEDException("Invalid range");
         return a(Range::S(pos - 1), "");
     }
 

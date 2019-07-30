@@ -982,3 +982,51 @@ Line 1
                 fn.Assert();
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(iOnLastLine) {
+            WriteFn fn({
+                    "11",
+                    "Line 1",
+                    "Line 2",
+                    "Line 3",
+                    "Line 4",
+                    "Line 5",
+                    "Line 6",
+                    "Line 7",
+                    "Line 8",
+                    "Line 9",
+                    "It worked",
+                    "Twice",
+                    "Line 10",
+                });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.line = 10;
+                g_state.readCharFn = [state]() -> char {
+                    std::string stuff = R"(i
+It worked
+.
+11i
+Twice
+.
+.=
+,p
+)";
+                    if(*state >= stuff.size()) return EOF;
+                    return stuff[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                try {
+                    Loop();
+                } catch(application_exit& ex) {
+                }
+                ASSERT(g_state.dirty);
+                ASSERT(g_state.nlines == 12);
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
