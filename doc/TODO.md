@@ -51,7 +51,7 @@ Display
 + [x] =
 + [x] <CR>
 + [x] ~~Interactive write string prints UTF16 so that conhost shows unicode properly~~ print out UTF8 correctly
-+ [ ] **read** utf8 correctly on console
++ [x] **read** utf8 correctly on console
 
 Misc
 ----
@@ -134,7 +134,7 @@ I/O
 + [x] .,.W
 + [x] q
 + [x] Q
-+ [ ] ^V literal input
++ [X] ^V literal input – It's done, but it works poorly. Might revisit this one in the future
 + [x] handle `CTRL_C` and `CTRL_BRK` elegantly
 + [ ] dump swapfile to a readable file if console's closed; or call `_exit` which theoretically won't purge the tmp file? or was that `__exit`? or `_quick_exit`? meh
 
