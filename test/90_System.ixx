@@ -1,34 +1,3 @@
-        struct WriteFn {
-            std::shared_ptr<size_t> state;
-            std::vector<std::optional<std::string>> lines;
-            WriteFn(decltype(lines) const& lines_ = {})
-                : state(new size_t{0})
-                , lines(lines_)
-            {}
-            void operator()(std::string s) {
-                if(*state >= lines.size()) {
-                    fprintf(stderr, "    ....Unexpected string: %s", s.c_str());
-                    ASSERT(!"Read too much!");
-                    return;
-                }
-                if(lines[*state]) {
-                    if(s != (*lines[*state]+"\n")) {
-                        fprintf(stderr, "    ....Expected: %s\n", lines[*state]->c_str());
-                        fprintf(stderr, "    ....Got: %s", s.c_str());
-                    }
-                    ASSERT(s == (*lines[*state]+"\n"));
-                }
-                ++(*state);
-            }
-            void Assert() const {
-                if(*state != lines.size()) {
-                    fprintf(stderr, "    ....Expected to have read %zd\n", lines.size());
-                    fprintf(stderr, "    ....Actually read %zd\n", *state);
-                }
-                ASSERT(*state == lines.size());
-            }
-        };
-
         SUITE_SETUP() {
             // FIXME refactor this out
             g_state();
