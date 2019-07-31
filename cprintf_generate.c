@@ -48,25 +48,6 @@ int main(int argc, char* argv[])
     while(!feof(f)) {
         read = !!fgets(buf, 256, f);
         if(!read) continue;
-        if(strcmp(buf, ">>>GUARDS<<<\n") == 0) {
-            p = lhead;
-            while(p != ltail) {
-                fprintf(g,
-#if 0
-                        "#ifndef CPRINTF_%s\n"
-                        "# define __CPRINTF_%s 0\n"
-                        "#else\n"
-                        "# define __CPRINTF_%s 1\n"
-                        "#endif\n",
-                        *p, *p, *p);
-#else
-                        "#define __CPRINTF_%s 0\n",
-                        *p);
-#endif
-                ++p;
-            }
-            continue;
-        }
         if(strcmp(buf, ">>>KEYS<<<\n") == 0) {
             p = lhead;
             while(p != ltail) {
@@ -81,7 +62,7 @@ int main(int argc, char* argv[])
             p = lhead;
             while(p != ltail) {
                 fprintf(g,
-                        "    __CPRINTF_%s,\n",
+                        "    0 /* %s */,\n",
                         *p);
                 ++p;
             }
