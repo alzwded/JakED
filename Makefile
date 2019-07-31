@@ -17,6 +17,7 @@ parser \
 error \
 swap \
 regex \
+MandT \
 
 # leave above line blank
 
@@ -27,7 +28,7 @@ jaked_debug.exe: $(SOURCES)
 	cl /std:c++17 /EHa /Zi /DJAKED_DEBUG $** /Fe$@
 
 jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx 
-	cl /std:c++17 /EHa /Zi /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) jaked_test.cpp swapfile.cpp
+	cl /std:c++17 /EHa /Zi /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj jaked_test.cpp swapfile.cpp
 
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
