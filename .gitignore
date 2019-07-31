@@ -1,4 +1,5 @@
 *.exe
+license.cpp
 cprintf.h
 *.out
 *.o

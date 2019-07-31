@@ -21,7 +21,7 @@ MandT \
 
 # leave above line blank
 
-jaked.exe: $(SOURCES)
+jaked.exe: $(SOURCES) license.cpp
 	cl /std:c++17 /EHa /O2 /Ob1 /Ox /Ot /MT $** /Fe:$@
 
 jaked_debug.exe: $(SOURCES)
@@ -55,5 +55,11 @@ chrono.exe: chrono.c
 
 $(SOURCES): $(HEADERS)
 
+license.cpp: LICENSE Makefile
+	echo.extern ^"C^" const char LICENSE[] = R^"(>license.cpp
+    type LICENSE>>license.cpp
+    echo.)^";>>license.cpp
+	echo.#pragma comment(linker, ^"^/include:LICENSE^")>>license.cpp
+
 clean:
-	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h
+	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp
