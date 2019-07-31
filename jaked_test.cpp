@@ -69,6 +69,38 @@ inline size_t CountLines()
     }
     return n;
 }
+struct WriteFn {
+    std::shared_ptr<size_t> state;
+    std::vector<std::optional<std::string>> lines;
+    WriteFn(decltype(lines) const& lines_ = {})
+        : state(new size_t{0})
+        , lines(lines_)
+    {}
+    void operator()(std::string s) {
+        if(*state >= lines.size()) {
+            fprintf(stderr, "    ....Unexpected string: %s", s.c_str());
+            ASSERT(!"Read too much!");
+            return;
+        }
+        if(lines[*state]) {
+            if(s != (*lines[*state]+"\n")) {
+                fprintf(stderr, "    ....Expected: %s\n", lines[*state]->c_str());
+                fprintf(stderr, "    ....Got: %s", s.c_str());
+            }
+            ASSERT(s == (*lines[*state]+"\n"));
+        }
+        ++(*state);
+    }
+    void Assert() const {
+        if(*state != lines.size()) {
+            fprintf(stderr, "    ....Expected to have read %zd\n", lines.size());
+            fprintf(stderr, "    ....Actually read %zd\n", *state);
+        }
+        ASSERT(*state == lines.size());
+    }
+};
+
+
 
 struct ATEST {
     static void NONE() {}
@@ -251,6 +283,10 @@ void DEFINE_SUITES() {
 
     DEF_SUITE(81_Substitute) {
 #       include "test/81_Substitute.ixx"
+    } END_SUITE();
+
+    DEF_SUITE(85_MoveAndTransfer) {
+#       include "test/85_MoveAndTransfer.ixx"
     } END_SUITE();
 
     DEF_SUITE(90_System) {

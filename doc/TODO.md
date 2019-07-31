@@ -95,9 +95,9 @@ Commands
 
 + [x] j
 + [x] jSEPARATOR join lines using SEPARATOR (extension)
-+ [ ] .,.m.
-+ [ ] move preserves registers
-+ [ ] .,.t.
++ [x] .,.m.
++ [x] move preserves registers
++ [x] .,.t.
 
 *Cut buffer, register update*:
 

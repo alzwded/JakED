@@ -507,6 +507,7 @@ int SkipWS(std::string const& s, int i)
 std::tuple<int, int> ReadNumber(std::string const&, int);
 std::tuple<int, int> ParseRegex(std::string s, int i);
 std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i);
+std::tuple<Range, int> ParseRange(std::string const&, int i);
 
 namespace CommandsImpl {
     void r(Range range, std::string tail)
@@ -1211,6 +1212,160 @@ namespace CommandsImpl {
             g_state.line = r.second;
         }
     }
+
+    void m(Range r, std::string tail)
+    {
+        if(r.first < 1 || r.second > g_state.nlines) throw JakEDException("Invalid range");
+
+        tail = tail.substr(SkipWS(tail, 0));
+        int i;
+        Range destination;
+        std::tie(destination, i) = ParseRange(tail, 0);
+        if(destination.second < 0 || destination.second > g_state.nlines) throw JakEDException("Invalid target range");
+        if(destination.second == r.second) {
+            g_state.line = destination.second;
+            return; // NOP
+        }
+        std::stringstream undoBuffer;
+        auto newLine = 0;
+        cprintf<CPK::MandT>("M,N P = %d,%d %d\n", r.first, r.second, destination.second);
+        if(destination.second > r.second) {
+            undoBuffer << (destination.second - (r.second - r.first + 1) + 1)
+                << ","
+                << (destination.second)
+                << "m"
+                << (r.second - 1);
+            newLine = destination.second;
+        } else if(destination.second < r.first) {
+            undoBuffer << (r.first - destination.second)
+                << ","
+                << (r.first - destination.second + (r.second - r.first + 1))
+                << "m"
+                << (r.second);
+            newLine = destination.second + r.second - r.first + 1;
+        } else {
+            throw JakEDException("Destination overlaps with source");
+        }
+
+        int idx = r.first;
+        auto beforeCut = g_state.swapfile.head();
+        while(idx-- > 1
+                && beforeCut)
+        {
+            beforeCut = beforeCut->next();
+            if(CtrlC()) {
+                return;
+            }
+        }
+        int count = r.second - r.first + 1;
+        auto beforeNext = beforeCut->Copy();
+        while(count--
+                && beforeNext)
+        {
+            beforeNext = beforeNext->next();
+            if(CtrlC()) {
+                return;
+            }
+        }
+
+        idx = destination.second;
+        auto afterThis = g_state.swapfile.head();
+        while(idx--
+                && afterThis)
+        {
+            afterThis = afterThis->next();
+            if(CtrlC()) {
+                return;
+            }
+        }
+
+        if(beforeCut != afterThis) {
+            auto continueFrom = afterThis->next();
+            afterThis->link(beforeCut->next());
+            beforeCut->link(beforeNext->next());
+            beforeNext->link(continueFrom);
+        }
+
+        g_state.line = newLine;
+        g_state.dirty = true;
+
+        auto inserted = g_state.swapfile.line(undoBuffer.str());
+        g_state.swapfile.undo(inserted);
+    }
+
+    void t(Range r, std::string tail)
+    {
+        if(r.first < 1 || r.second > g_state.nlines) throw JakEDException("Invalid range");
+
+        tail = tail.substr(SkipWS(tail, 0));
+        if(tail.empty()) tail = ".";
+        int i;
+        Range destination;
+        std::tie(destination, i) = ParseRange(tail, 0);
+        cprintf<CPK::MandT>("M,N P = %d,%d %d\n", r.first, r.second, destination.second);
+        if(destination.second < 0 || destination.second > g_state.nlines) throw JakEDException("Invalid target range");
+        if(destination.second >= r.first && destination.second < r.second) {
+            throw JakEDException("Destination overlaps source");
+        }
+
+        size_t numInsertedLines = 0;
+
+        int idx = r.first;
+        auto beforeCut = g_state.swapfile.head();
+        while(idx-- > 1
+                && beforeCut)
+        {
+            beforeCut = beforeCut->next();
+            if(CtrlC()) {
+                return;
+            }
+        }
+
+        idx = destination.second;
+        auto afterThis = g_state.swapfile.head();
+        while(idx--
+                && afterThis)
+        {
+            afterThis = afterThis->next();
+            if(CtrlC()) {
+                return;
+            }
+        }
+
+        int count = r.second - r.first + 1;
+        auto it = beforeCut->next();
+        while(count--
+                && it)
+        {
+            auto inserted = g_state.swapfile.line(it->text());
+            inserted->link(afterThis->next());
+            afterThis->link(inserted);
+
+            ++numInsertedLines;
+            afterThis = inserted;
+            it = it->next();
+            if(CtrlC()) {
+                break;
+            }
+        }
+
+        cprintf<CPK::MandT>("numInsertedLines: %zd\n", numInsertedLines);
+        if(numInsertedLines) {
+            std::stringstream undoBuffer;
+            undoBuffer << (destination.second + 1)
+                << ","
+                << (destination.second + numInsertedLines)
+                << "d";
+
+            g_state.nlines += numInsertedLines;
+            g_state.line = destination.second + numInsertedLines;
+            
+            g_state.dirty = true;
+
+            auto inserted = g_state.swapfile.line(undoBuffer.str());
+            g_state.swapfile.undo(inserted);
+        }
+    }
 }
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -1240,6 +1395,8 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'x', &CommandsImpl::x },
     { 'y', &CommandsImpl::y },
     { 'l', &CommandsImpl::l },
+    { 'm', &CommandsImpl::m },
+    { 't', &CommandsImpl::t },
 };
 
 void exit_usage(char* msg, char* argv0)
