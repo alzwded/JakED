@@ -830,7 +830,7 @@ namespace CommandsImpl {
             i1 = i1->next();
         }
         fclose(f);
-        g_state.swapfile.Rebuild();
+        g_state.swapfile.gc();
         g_state.dirty = false;
         std::stringstream ss;
         ss << nBytes << std::endl;
