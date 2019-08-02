@@ -97,6 +97,7 @@ inline bool LinePtr::operator==(LinePtr const& right) const
 
 struct ISwapImpl
 {
+    virtual ~ISwapImpl();
     virtual LinePtr head() = 0;
     virtual LinePtr cut() = 0;
     virtual LinePtr undo() = 0;
@@ -110,6 +111,8 @@ struct ISwapImpl
       */
     virtual void gc() = 0;
 };
+
+inline ISwapImpl::~ISwapImpl() = default;
 
 class Swapfile
 {

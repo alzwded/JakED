@@ -406,9 +406,6 @@ public:
         uint16_t padding;
         int64_t cut;
         int64_t undo;
-        int64_t sz;
-        int64_t basesz;
-        uint16_t increment;
     };
 #   pragma pack(pop)
     static constexpr SIZE_T LineBaseSize = sizeof(MappedLine::LineFormat) - sizeof(MappedLine::LineFormat::text);
@@ -421,9 +418,10 @@ private:
     uint8_t* m_view;
     std::string m_name;
     MappedImpl(HANDLE hFile, std::string name, HANDLE hMap, uint8_t* mView, SIZE_T sz)
-        : m_file(hFile), m_name(name),
-        m_increment(1), m_size(0), m_baseSize(sz), m_view(mView)
+        : m_file(hFile), m_name(name), m_map(hMap),
+        m_increment(1), m_size(sizeof(Header)), m_baseSize(sz), m_view(mView)
     {
+        cprintf<CPK::swap>("[%p] MappedImpl created\n", this);
         static_assert(zBaseSize > sizeof(Header), "Incorrect base size");
     }
 
@@ -470,12 +468,18 @@ private:
 
     void EnsureSize(SIZE_T growBy = 0)
     {
+// I don't even know what null pointer gets dereferenced in the expression
+//      m_size + growBy > m_baseSize
+#pragma warning(push)
+#pragma warning(disable:6011)
         if(m_size + growBy > m_baseSize) {
+            cprintf<CPK::swap>("[%p] Swap file must grow, because %zd is smaller than %zd\n", this, m_baseSize, m_size + growBy);
             UnmapViewOfFile(m_view);
             CloseHandle(m_map);
             while(m_size + growBy > m_baseSize) {
                 m_increment++;
                 m_baseSize = GetNextIncrement(m_increment);
+                cprintf<CPK::swap>("[%p] Swapfile increment computed to be %zd\n", this, m_baseSize);
             }
             m_map = CreateFileMapping(
                         m_file,
@@ -484,15 +488,19 @@ private:
                         (m_baseSize >> 32) & 0xFFFFFFFF,
                         m_baseSize & 0xFFFFFFFF,
                         NULL);
+            if(!m_map) {
+                // FIXME more graciousness?
+                fprintf(stderr, "[%p] MappedImpl: I have forgotten. I have failed...\n", this);
+                std::terminate();
+            }
             m_view = nullptr;
         }
         if(!m_view) {
+            cprintf<CPK::swap>("[%p] Creating view\n", this);
             m_view = (uint8_t*)MapViewOfFile(m_map, FILE_MAP_ALL_ACCESS, 0, 0, m_baseSize);
             Header* head = (Header*)m_view;
-            head->basesz = m_baseSize;
-            head->sz = m_size;
-            head->increment = m_increment;
         }
+#pragma warning(pop)
     }
 
 public:
@@ -510,16 +518,18 @@ public:
             GetCWDFileName,
         };
         for(auto&& tempFunction : tempFunctions) {
-            auto* name = tempFunction().c_str();
+            auto tempName = tempFunction();
+            auto* name = tempName.c_str();
             hFile = CreateFileA(
                     name,
                     GENERIC_READ|GENERIC_WRITE,
                     0,
                     NULL,
-                    CREATE_NEW,
+                    CREATE_ALWAYS,
                     /*FILE_ATTRIBUTE_TEMPORARY|*/FILE_FLAG_RANDOM_ACCESS, // but no DELETE_ON_CLOSE
                     NULL);
             if(hFile) {
+                sz = GetNextIncrement(1);
                 hMap = CreateFileMapping(
                         hFile,
                         NULL,
@@ -527,7 +537,6 @@ public:
                         (sz >> 32) & 0xFFFFFFFF,
                         sz & 0xFFFFFFFF,
                         NULL);
-                sz = GetNextIncrement(1);
                 if(hMap) {
                     mView = (uint8_t*)MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0, sz);
                     if(!mView) {
@@ -539,10 +548,8 @@ public:
                         continue;
                     }
 
-                    head.basesz = sz;
-                    head.increment = 1;
                     memcpy(mView, &head, sizeof(Header));
-                    cprintf<CPK::swap>("--> will use this one [%p]\n", hFile);
+                    cprintf<CPK::swap>("--> will use this one %s [%p]\n", name, hFile);
                     return new MappedImpl(hFile, name, hMap, mView, sz);
                 } else {
                     CloseHandle(hFile);
@@ -555,6 +562,8 @@ public:
 
     static ISwapImpl* Recover(std::string const& path)
     {
+#if 0
+        // get basesize from file size, and traverse each line to recompute size, and determine increment from basesize; no need to do shennanigans and store that info in the swapfile itself
         Header head;
         memset(&head, 0, sizeof(head));
         HANDLE hFile = (HANDLE)0, hMap = (HANDLE)0;
@@ -594,11 +603,11 @@ public:
                     return nullptr;
                 }
 
-                Header* head = (Header*)mView;
-                auto oldSize = head->sz;
+                Header* thishead = (Header*)mView;
+                auto oldSize = thishead->sz;
 
-                auto rval = new MappedImpl(hFile, name, hMap, mView, head->basesz);
-                head = nullptr; // clobbered by EnsureSize
+                auto rval = new MappedImpl(hFile, name, hMap, mView, thishead->basesz);
+                thishead = nullptr; // clobbered by EnsureSize
                 mView = nullptr; // clobbered by EnsureSize
                 rval->EnsureSize(); // sets increment and recreates mapping and view to be what they should be
                 rval->m_size = oldSize; // set the correct size
@@ -609,6 +618,7 @@ public:
             }
         }
         cprintf<CPK::swap>("Failed to create any temp file\n");
+#endif
         return nullptr;
     }
 
@@ -618,6 +628,7 @@ public:
         if(m_map) CloseHandle(m_map);
         if(m_file) CloseHandle(m_file);
         if(!m_name.empty()) DeleteFileA(m_name.c_str()); // TODO use DeleteFileW
+        cprintf<CPK::swap>("Deleted %s maybe\n", m_name.c_str());
     }
 
     LinePtr head() override
@@ -648,7 +659,7 @@ public:
             return {};
         }
 
-        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", *this, head->undo);
+        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", this, head->undo);
         return std::make_shared<MappedLine>(*this, head->undo);
     }
 
@@ -658,13 +669,12 @@ public:
                 + s.size());
         Header* head = (Header*)(m_view);
 
-        cprintf<CPK::swap>("[%p] Adding line to %I64d\n", m_file, m_size);
+        cprintf<CPK::swap>("[%p] Adding line to %zd\n", m_file, m_size);
         MappedLine::LineFormat* newLine = (MappedLine::LineFormat*)(m_view + m_size);
         newLine->next = 0;
         newLine->sz = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
         memcpy(&newLine->text, s.c_str(), s.size()); // TODO disable SAL check, I know
         m_size += LineBaseSize + newLine->sz;
-        head->sz = m_size;
         return std::make_shared<MappedLine>(*this, ((uint8_t*)newLine) - m_view);
     }
 
@@ -741,6 +751,11 @@ public:
         }
 
         std::swap(m_file, temp->m_file);
+        std::swap(m_map, temp->m_map);
+        std::swap(m_baseSize, temp->m_baseSize);
+        std::swap(m_increment, temp->m_increment);
+        std::swap(m_view, temp->m_view);
+        std::swap(m_size, temp->m_size);
         std::swap(m_name, temp->m_name);
     }
 };
@@ -768,8 +783,13 @@ inline void MappedLine::link(LinePtr const& p)
 {
     auto pp = p.DownCast<MappedLine>();
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    me->next = pp->offset;
-    cprintf<CPK::swap>("[%p] link: %I64d -> %I64d\n", &file, offset, pp->offset);
+    if(!pp) {
+        me->next = 0;
+        cprintf<CPK::swap>("[%p] link: %zd -> %zd\n", &file, offset, 0ull);
+    } else {
+        me->next = pp->offset;
+        cprintf<CPK::swap>("[%p] link: %zd -> %zd\n", &file, offset, pp->offset);
+    }
 }
 
 class MemoryImpl : public FileImpl
@@ -784,6 +804,7 @@ struct NullImpl: public FileImpl
 Swapfile::Swapfile(int type) : m_pImpl(nullptr)
 {
     ISwapImpl* (*factories[])() = {
+        &MappedImpl::Create,
         &FileImpl::Create,
         &MemoryImpl::Create,
         &NullImpl::Create,
@@ -797,11 +818,12 @@ Swapfile::Swapfile(int type) : m_pImpl(nullptr)
 
 void Swapfile::type(int t)
 {
-    t = 2;
+    t = 3;
     ISwapImpl* (*factories[])() = {
         &NullImpl::Create,
         &MemoryImpl::Create,
         &FileImpl::Create,
+        &MappedImpl::Create,
         nullptr
     };
     if(t < 0 || t > sizeof(factories) / sizeof(factories[0])) std::terminate();

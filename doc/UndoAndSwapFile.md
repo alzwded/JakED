@@ -5,14 +5,14 @@ Swap file format:
 
 ```
 Swapfile:
-    i64     head
+    u64     head
     u16     padding, always 0
-    i64     cut
-    i64     undo
+    u64     cut
+    u64     undo
     LE{*}   data
 
 LE:
-    i64     next
+    u64     next
     u16     sz
     u8[sz]  text
 ```
@@ -29,7 +29,7 @@ In C format:
 
     struct Header
     {
-        struct Line head[1] = { &data[?], 0 };
+        struct Line head[1]; // assert(head[0].sz == 0);
         struct Line *cut;
         struct Line *undo;
         struct Line data[?];
