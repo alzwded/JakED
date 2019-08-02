@@ -830,7 +830,7 @@ namespace CommandsImpl {
             i1 = i1->next();
         }
         fclose(f);
-        g_state.swapfile.Rebuild();
+        g_state.swapfile.gc();
         g_state.dirty = false;
         std::stringstream ss;
         ss << nBytes << std::endl;
@@ -1908,7 +1908,8 @@ BOOL consoleHandler(DWORD signal)
 {
     bool falsy = false;
     switch(signal) {
-        case CTRL_CLOSE_EVENT: cprintf<CPK::CTRLC>("a\n");
+        case CTRL_CLOSE_EVENT: 
+            quick_exit(127);
         case CTRL_BREAK_EVENT:
         case CTRL_C_EVENT:
             // Use LOCK CMPXCHG because it's a race between
@@ -1940,7 +1941,7 @@ int main(int argc, char* argv[])
         oldConsoleInputCP = GetConsoleCP();
         SetConsoleCP(CP_UTF8);
     }
-    atexit(RestoreConsoleCP);
+    at_quick_exit(RestoreConsoleCP);
 
     if(argc == 1) {
         exit_usage("No such file!", argv[0]);

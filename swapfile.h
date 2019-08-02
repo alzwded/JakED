@@ -97,6 +97,7 @@ inline bool LinePtr::operator==(LinePtr const& right) const
 
 struct ISwapImpl
 {
+    virtual ~ISwapImpl();
     virtual LinePtr head() = 0;
     virtual LinePtr cut() = 0;
     virtual LinePtr undo() = 0;
@@ -104,12 +105,14 @@ struct ISwapImpl
     virtual LinePtr cut(LinePtr const&) = 0;
     virtual LinePtr undo(LinePtr const&) = 0;
     /**
-      * Rebuild the swap file. All LinePtr's will become invalid.
+      * gc the swap file. All LinePtr's will become invalid.
       * 
       * This compacts the swap file. Should be invoked after every write.
       */
-    virtual void Rebuild() = 0;
+    virtual void gc() = 0;
 };
+
+inline ISwapImpl::~ISwapImpl() = default;
 
 class Swapfile
 {
@@ -118,7 +121,8 @@ public:
     enum {
         DISABLE_SWAPFILE,
         IN_MEMORY_SWAPFILE,
-        FILE_BACKED_SWAPFILE /** the default */
+        FILE_BACKED_SWAPFILE, /** the default */
+        MAPPED_FILE_BACKED_SWAPFILE
     };
     Swapfile(int type = IN_MEMORY_SWAPFILE);
     Swapfile() = delete;
@@ -136,6 +140,7 @@ public:
       *    0 = disable swap file
       *    1 = in-memory
       *    2 = file-backed
+      *    3 = mapped file-backed
       */
     void type(int t);
 
@@ -146,11 +151,11 @@ public:
     LinePtr cut(LinePtr const&);
     LinePtr undo(LinePtr const&);
     /**
-      * Rebuild the swap file. All LinePtr's will become invalid.
+      * gc the swap file. All LinePtr's will become invalid.
       * 
       * This compacts the swap file. Should be invoked after every write.
       */
-    void Rebuild();
+    void gc();
 };
 
 #endif

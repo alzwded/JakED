@@ -114,12 +114,18 @@ Swapfile
 
 + [x] swap file: see [design document](UndoAndSwapFile.md)
   * [x] On w/W, buffer is cleared and re-initialized with current cut buffer
-  * [ ] if no I/O can be performed at all, keep everything in a giant stringstream
   * [x] on clean exit, delete file
-  * [ ] Use MapViewOfFile and CreateFileMapping instead of CRT file I/O because I/O is through the roof. CreateFileMapping can be used to grow the swap file as needed (say, `4k -> 8k -> ... 2**27 -> 2 * 2**27 -> 3 * 2**27 ...`; `2**27` should be 100MB or so). MapViewOfFile should be done chunked, because UnmapViewOfFile will schedule changed pages for commit (async) which would keep it pretty fresh. In this implementation, the "no I/O can be performed" scenario can cause it to work with swapfile backed memory (i.e. normal memory) while keeping the same API. Might work on this once I have more test coverage, since the slow CRTIO implementation at least works for now. See [remapper](../experiments/remapper.c)
-+ [x] large file support (i.e. use getfpos and setfpos and update header to be 64bit) – it's sort-of there, but uses a whole lotta disk space
-  * [ ] command line flag for no swap file and env var to set swap file default directory
+  * [x] Use MapViewOfFile and CreateFileMapping instead of CRT file I/O because I/O is through the roof. CreateFileMapping can be used to grow the swap file as needed (say, `4k -> 8k -> ... 2**27 -> 2 * 2**27 -> 3 * 2**27 ...`; `2**27` should be 100MB or so). MapViewOfFile should be done chunked, because UnmapViewOfFile will schedule changed pages for commit (async) which would keep it pretty fresh. In this implementation, the "no I/O can be performed" scenario can cause it to work with swapfile backed memory (i.e. normal memory) while keeping the same API. Might work on this once I have more test coverage, since the slow CRTIO implementation at least works for now. See [remapper](../experiments/remapper.c) – it's much, much faster now
 + [x] rewrite swap file to be a giant linked list + a bunch of registers
++ [x] large file support (i.e. use getfpos and setfpos and update header to be 64bit) – it's sort-of there, but uses a whole lotta disk space
++ [ ] NullImpl
++ [ ] In-memory impl based on MappedImpl (but without an explicit file)
++ [ ] command line flags:
+  * [ ] `--slow-swap[=dir]` to use `FileImpl`
+  * [ ] `--no-swap` to use `MemoryImpl`
+  * [ ] `--swap[=dir]` to use `MappedImpl`
+  * [ ] `JAKED_DEFAULT_SWAP_DIRECTORY`
+  * [ ] `--recover=file`, but I probably need to align the two formats first
 
 I/O
 ---
@@ -127,6 +133,7 @@ I/O
 + [x] r [F]
   * [ ] be able to read test\OctrlChars.txt; right now it fails at ^Z (windows EOT? can that even be parsed?)
     this might be a non-issue, although it would be nice to be able to read everything. Need to check if real ed can read ^D or something like that.
+    I think it's because I'm using strings and fgetc or something like that, I think after switching to use pascal strings, and drastically change the way input handling is done (i.e. fgetc -> ReadFile) we'll see improvements, but that's a big task
 + [x] e [F]
 + [x] E [F]
 + [x] f FILE
@@ -136,7 +143,7 @@ I/O
 + [x] Q
 + [X] ^V literal input – It's done, but it works poorly. Might revisit this one in the future
 + [x] handle `CTRL_C` and `CTRL_BRK` elegantly
-+ [ ] dump swapfile to a readable file if console's closed; or call `_exit` which theoretically won't purge the tmp file? or was that `__exit`? or `_quick_exit`? meh
++ [x] ~~dump swapfile to a readable file~~ have a recovery file if console's closed; ~~or call `_exit` which theoretically won't purge the tmp file? or was that `__exit`? or `_quick_exit`? meh~~ calls `quick_exit(127)`
 
 *Shell versions*:
 
@@ -149,6 +156,7 @@ Internals, Externals and Other Tasks
 ------------------------------------
 
 + [x] refactor string processing – done, implemented swapfile.
+  * [ ] refactor it again to use a byte array (required for multi-level undo support without reimagining the swapfile format)
 + [x] scripting behaviour (cancel on error if !isatty)
 + [/] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM
@@ -161,3 +169,4 @@ Internals, Externals and Other Tasks
 + [ ] read windows-native UTF16 files (`rutf16 somefile?`)
 + [ ] don't crash if file can't be read
 + [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long
++ [ ] add a command line flag for recovery
