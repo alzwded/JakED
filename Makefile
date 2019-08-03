@@ -18,6 +18,7 @@ error \
 swap \
 regex \
 MandT \
+g \
 
 # leave above line blank
 
@@ -25,10 +26,10 @@ jaked.exe: $(SOURCES) license.cpp
 	cl /std:c++17 /EHa /O2 /Ob1 /Ox /Ot /MT $** /Fe:$@
 
 jaked_debug.exe: $(SOURCES)
-	cl /std:c++17 /EHa /Zi /DJAKED_DEBUG $** /Fe$@
+	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_DEBUG $** /Fe$@
 
 jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx 
-	cl /std:c++17 /EHa /Zi /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj jaked_test.cpp swapfile.cpp
+	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj jaked_test.cpp swapfile.cpp
 
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test

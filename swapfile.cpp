@@ -73,18 +73,21 @@ public:
         return len;
     }
 
-    std::string text() override
+    Text text() override
     {
         fpos_t offset = m_pos + offsetof(LineFormat, sz);
         fsetpos(m_file, &offset);
         uint16_t len = 0;
         fread(&len, 2, 1, m_file);
-        std::string rval(len, '\0');
+        if(len == RefMagic) throw std::runtime_error("Invalid indirection");
+        char* rval = (char*)malloc(len + 1);
+        if(!rval) std::terminate();
+        rval[len] = '\0';
         offset = m_pos + offsetof(LineFormat, text);
         fsetpos(m_file, &offset);
         cprintf<CPK::swap>("[%p] Read %u chars from %I64d\n", m_file, len, m_pos);
-        fread(rval.data(), 1, len, m_file);
-        return rval;
+        fread(rval, 1, len, m_file);
+        return Text(len, (uint8_t*)rval, std::function<void(void*)>([](void*p) { free(p); }));
     }
 
     LinePtr next() override
@@ -112,7 +115,29 @@ public:
     {
         return std::make_shared<FileLine>(m_file, m_pos);
     }
-};
+
+    Text ref() override
+    {
+        static_assert(sizeof(fpos_t) <= sizeof(uint8_t*), "fpos_t is smaller than a pointer");
+        return Text(RefMagic, (uint8_t*)(m_pos));
+    }
+
+    LinePtr deref() override
+    {
+        fpos_t offset = m_pos + offsetof(LineFormat, sz);
+        fsetpos(m_file, &offset);
+        uint16_t len = 0;
+        fread(&len, 2, 1, m_file);
+        if(len != RefMagic) throw std::runtime_error("Invalid indirection");
+        offset = m_pos + offsetof(LineFormat, text);
+        fsetpos(m_file, &offset);
+        cprintf<CPK::swap>("[%p] Read %u chars from %I64d\n", m_file, len, m_pos);
+        fpos_t target = 0;
+        fread(&target, sizeof(target), 1, m_file);
+        return std::make_shared<FileLine>(m_file, target);
+    }
+
+}; // FileLine
 
 class FileImpl : public ISwapImpl
 {
@@ -245,7 +270,7 @@ public:
         return std::make_shared<FileLine>(m_file, head.undo);
     }
 
-    LinePtr line(std::string const& s) override
+    LinePtr line(Text const& s) override
     {
         fseek(m_file, 0, SEEK_END);
         fpos_t fp;
@@ -255,10 +280,15 @@ public:
         cprintf<CPK::swap>("[%p] Adding line to %I64d\n", m_file, fp);
         int64_t zero = 0;
         fwrite(&zero, sizeof(int64_t), 1, m_file);
-        uint16_t len = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
+        uint16_t len = s.size();
         fwrite(&len, sizeof(uint16_t), 1, m_file);
-        fwrite(s.data(), 1, len, m_file);
-        cprintf<CPK::swap>("--> wrote %u chars\n", len);
+        if(len == RefMagic) {
+            fwrite(s.data(), sizeof(fpos_t), 1, m_file);
+            cprintf<CPK::swap>("--> wrote indirect handle to %zd\n", (fpos_t)s.data());
+        } else {
+            fwrite(s.data(), 1, len, m_file);
+            cprintf<CPK::swap>("--> wrote %u chars\n", len);
+        }
 
         return std::make_shared<FileLine>(m_file, fp);
     }
@@ -300,6 +330,7 @@ public:
         return p;
     }
 
+#if 0
     void gc() override
     {
         cprintf<CPK::swap>("[%p] gcing swap file\n", m_file);
@@ -347,6 +378,7 @@ public:
         std::swap(m_file, temp->m_file);
         std::swap(m_name, temp->m_name);
     }
+#endif
 };
 
 class MappedLine : public ILine
@@ -361,7 +393,7 @@ public:
     {
         int64_t next;
         uint16_t sz;
-        char text[16];
+        uint8_t text[16];
     };
 #   pragma pack(pop)
 
@@ -382,7 +414,7 @@ public:
 
     size_t length() override;
 
-    std::string text() override;
+    Text text() override;
 
     LinePtr next() override;
 
@@ -392,6 +424,10 @@ public:
     {
         return std::make_shared<MappedLine>(file, offset);
     }
+
+    Text ref() override;
+
+    LinePtr deref() override;
 };
 
 
@@ -663,18 +699,23 @@ public:
         return std::make_shared<MappedLine>(*this, head->undo);
     }
 
-    LinePtr line(std::string const& s) override
+    LinePtr line(Text const& s) override
     {
         EnsureSize(LineBaseSize
-                + s.size());
+                + (s.size() == RefMagic ? (SIZE_T)sizeof(SIZE_T) : (SIZE_T)s.size()));
         Header* head = (Header*)(m_view);
 
         cprintf<CPK::swap>("[%p] Adding line to %zd\n", m_file, m_size);
         MappedLine::LineFormat* newLine = (MappedLine::LineFormat*)(m_view + m_size);
         newLine->next = 0;
-        newLine->sz = (uint16_t)std::min(s.size(), (size_t)0xFFFF);
-        memcpy(&newLine->text, s.c_str(), s.size()); // TODO disable SAL check, I know
-        m_size += LineBaseSize + newLine->sz;
+        newLine->sz = s.size();
+        if(newLine->sz == RefMagic) {
+            memcpy(&newLine->text[0], s.data(), sizeof(SIZE_T));
+            m_size += LineBaseSize + sizeof(SIZE_T);
+        } else {
+            memcpy(&newLine->text[0], s.data(), s.size());
+            m_size += LineBaseSize + newLine->sz;
+        }
         return std::make_shared<MappedLine>(*this, ((uint8_t*)newLine) - m_view);
     }
 
@@ -706,6 +747,7 @@ public:
         return p;
     }
 
+#if 0
     void gc() override
     {
         cprintf<CPK::swap>("[%p] gcing swap file\n", m_file);
@@ -758,6 +800,7 @@ public:
         std::swap(m_size, temp->m_size);
         std::swap(m_name, temp->m_name);
     }
+#endif
 };
 
 inline size_t MappedLine::length()
@@ -766,10 +809,11 @@ inline size_t MappedLine::length()
     return me->sz;
 }
 
-inline std::string MappedLine::text()
+inline Text MappedLine::text()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    return std::string((const char*)me->text, me->sz);
+    if(me->sz == RefMagic) throw std::runtime_error("Invalid indirection");
+    return Text(me->sz, &me->text[0]);
 }
 
 inline LinePtr MappedLine::next()
@@ -790,6 +834,18 @@ inline void MappedLine::link(LinePtr const& p)
         me->next = pp->offset;
         cprintf<CPK::swap>("[%p] link: %zd -> %zd\n", &file, offset, pp->offset);
     }
+}
+
+inline Text MappedLine::ref()
+{
+    LineFormat* me = (LineFormat*)(file.m_view + offset);
+    return Text(RefMagic, (uint8_t*)&me->text[0]);
+}
+
+inline LinePtr MappedLine::deref()
+{
+    LineFormat* me = (LineFormat*)(file.m_view + offset);
+    return std::make_shared<MappedLine>(file, *(decltype(offset)*)&me->text[0]);
 }
 
 class MemoryImpl : public FileImpl
@@ -841,8 +897,8 @@ Swapfile::~Swapfile()
 LinePtr Swapfile::head() { return m_pImpl->head(); }
 LinePtr Swapfile::cut() { return m_pImpl->cut(); }
 LinePtr Swapfile::undo() { return m_pImpl->undo(); }
-LinePtr Swapfile::line(std::string const& s) { return m_pImpl->line(s); }
+LinePtr Swapfile::line(Text const& s) { return m_pImpl->line(s); }
 LinePtr Swapfile::undo(LinePtr const& l) { return m_pImpl->undo(l); }
 LinePtr Swapfile::cut(LinePtr const& l) { return m_pImpl->cut(l); }
-void Swapfile::gc() { return m_pImpl->gc(); }
+//void Swapfile::gc() { return m_pImpl->gc(); }
 
