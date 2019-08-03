@@ -300,6 +300,7 @@ public:
         return p;
     }
 
+#if 0
     void gc() override
     {
         cprintf<CPK::swap>("[%p] gcing swap file\n", m_file);
@@ -347,6 +348,7 @@ public:
         std::swap(m_file, temp->m_file);
         std::swap(m_name, temp->m_name);
     }
+#endif
 };
 
 class MappedLine : public ILine
@@ -706,6 +708,7 @@ public:
         return p;
     }
 
+#if 0
     void gc() override
     {
         cprintf<CPK::swap>("[%p] gcing swap file\n", m_file);
@@ -758,6 +761,7 @@ public:
         std::swap(m_size, temp->m_size);
         std::swap(m_name, temp->m_name);
     }
+#endif
 };
 
 inline size_t MappedLine::length()
@@ -844,5 +848,5 @@ LinePtr Swapfile::undo() { return m_pImpl->undo(); }
 LinePtr Swapfile::line(std::string const& s) { return m_pImpl->line(s); }
 LinePtr Swapfile::undo(LinePtr const& l) { return m_pImpl->undo(l); }
 LinePtr Swapfile::cut(LinePtr const& l) { return m_pImpl->cut(l); }
-void Swapfile::gc() { return m_pImpl->gc(); }
+//void Swapfile::gc() { return m_pImpl->gc(); }
 

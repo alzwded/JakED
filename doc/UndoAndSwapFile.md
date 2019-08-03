@@ -51,7 +51,7 @@ In C++ land, the Swapfile can perform a very small number of operations:
 + read the `head`, `cut` and `undo` registers, which return the head of their respective lists (if any in the case of the latter two)
 + set the `cut` and `undo` list heads
 + add a new, unlinked `Line` to the text
-+ gc: this is called after the file is written. The goal is to reorder and compact the swap file. It effectively garbage collects disconnected lines via mark-and-sweep – so, obviously, try not to create loops.
++ ~~gc: this is called after the file is written. The goal is to reorder and compact the swap file. It effectively garbage collects disconnected lines via mark-and-sweep – so, obviously, try not to create loops.~~
 
 The Line object supports the following operations:
 
@@ -60,7 +60,7 @@ The Line object supports the following operations:
 + `text`: retrieves the associated `text` field
 + `length`: retrieves the associated `sz` field
 
-Lines are immutable because they are well packed in memory; memory management responsabilities are sort-of placed on the caller (even though you only have `new` and `gc`).
+Lines are immutable because they are well packed in memory; memory management responsabilities are sort-of placed on the caller (even though you only have `new` ~~and `gc`~~).
 
 All text manipulation commands use the Swapfile as storage, thus all manipulation commands use the above operations to achieve their goals.
 

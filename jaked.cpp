@@ -71,6 +71,7 @@ struct GState {
     bool showPrompt = false;
     std::regex regexp;
     std::string fmt;
+    std::list<LinePtr> gLines;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -87,7 +88,9 @@ struct GState {
         , decltype(zWindow) _zWindow = 1
         , decltype(showPrompt) _showPrompt = false
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
-        , decltype(fmt) _fmt = "")
+        , decltype(fmt) _fmt = ""
+        , decltype(gLines) _gLines = {}
+    )
         : filename(_filename)
         , line(_line)
         , PROMPT(_PROMPT)
@@ -104,6 +107,7 @@ struct GState {
         , showPrompt(_showPrompt)
         , regexp(_regexp)
         , fmt(_fmt)
+        , gLines(_gLines)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -121,8 +125,9 @@ struct GState {
         , decltype(zWindow) _zWindow = 1
         , decltype(showPrompt) _showPrompt = false
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
-        , decltype(fmt) _fmt = "")
-    {
+        , decltype(fmt) _fmt = ""
+        , decltype(gLines) _gLines = {}
+    ) {
         filename = _filename;
         line = _line;
         PROMPT = _PROMPT;
@@ -139,8 +144,8 @@ struct GState {
         showPrompt = _showPrompt;
         regexp = _regexp;
         fmt = _fmt;
+        gLines = _gLines;
     } // GState::operator()
-
 } g_state;
 
 struct JakEDException : public std::runtime_error
@@ -509,10 +514,16 @@ int SkipWS(std::string const& s, int i)
     return i;
 }
 
+// [number, continueFrom]
 std::tuple<int, int> ReadNumber(std::string const&, int);
+// [line, continueFrom]
 std::tuple<int, int> ParseRegex(std::string s, int i);
+// [fmt, G_OR_N, printLine]
 std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i);
+// [Range, continueFrom]
 std::tuple<Range, int> ParseRange(std::string const&, int i);
+// [Range, command, tail]
+std::tuple<Range, char, std::string> ParseCommand(std::string s);
 
 namespace CommandsImpl {
     void r(Range range, std::string tail)
@@ -835,7 +846,7 @@ namespace CommandsImpl {
             i1 = i1->next();
         }
         fclose(f);
-        g_state.swapfile.gc();
+        //g_state.swapfile.gc();
         g_state.dirty = false;
         std::stringstream ss;
         ss << nBytes << std::endl;
@@ -1445,9 +1456,65 @@ namespace CommandsImpl {
         }
     } // t
 
+    // TODO move this to be part of the parser instead of part of the g// family
+    std::vector<std::tuple<Range, char, std::string>> ReadCommandList(std::optional<std::string> first = std::nullopt)
+    {
+        bool readMore = false;
+        decltype(ReadCommandList(first)) rval;
+        if(first) {
+            auto t = ParseCommand(*first);
+            if(std::get<2>(t)[std::get<2>(t).size() - 1] == '\\')
+            {
+                std::get<2>(t) = std::get<2>(t).substr(0, std::get<2>(t).size() - 1);
+                readMore = true;
+            }
+            rval.push_back(t);
+        }
+        while(readMore) {
+            if(CtrlC()) throw std::runtime_error("Interrupted");
+            std::stringstream line;
+            int ii = 0;
+            while((ii = g_state.readCharFn()) != EOF) {
+                cprintf<CPK::g>("ii%d\n", ii);
+                char c = (char)(ii & 0xFF);
+                // If we got interrupted, clear the line buffer
+                if(CtrlC()) {
+                    throw JakEDException("Interrupted");
+                }
+                //cprintf<CPK::g>("Read %x\n", c);
+                if(c == '\n') break;
+                line << c;
+            } // read loop
+            cprintf<CPK::g>("Read: %s\n", line.str().c_str());
+            auto t = ParseCommand(line.str());
+            cprintf<CPK::g>("Parsed: [%d,%d]%c%s\n", std::get<0>(t).first, std::get<0>(t).second, std::get<1>(t), std::get<2>(t).c_str());
+            if(std::get<2>(t)[std::get<2>(t).size() - 1] == '\\')
+            {
+                cprintf<CPK::g>("Reading more\n");
+                std::get<2>(t) = std::get<2>(t).substr(0, std::get<2>(t).size() - 1);
+                readMore = true;
+            } else {
+                readMore = false;
+            }
+            rval.push_back(t);
+        } // while(readMore)
+        return rval;
+    } // ReadCommandList
+
     void g(Range r, std::string tail)
     {
-        throw JakEDException("not implemented");
+        int first = r.first,
+            last = r.second;
+        if(first < 1) first = 1;
+        if(last > g_state.nlines) last = g_state.nlines;
+        if(first > g_state.nlines) first = g_state.nlines;
+        if(last < 1) last = 1;
+
+        // acquire out command list
+        auto commandList = ReadCommandList(tail);
+
+        // mark lines we'll be processing, and save undo lines as well
+        throw JakEDException("Not implemented");
     } // g
 
 } // namespace CommandsImpl

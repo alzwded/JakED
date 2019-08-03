@@ -104,12 +104,14 @@ struct ISwapImpl
     virtual LinePtr line(std::string const&) = 0;
     virtual LinePtr cut(LinePtr const&) = 0;
     virtual LinePtr undo(LinePtr const&) = 0;
+#if 0
     /**
       * gc the swap file. All LinePtr's will become invalid.
       * 
       * This compacts the swap file. Should be invoked after every write.
       */
     virtual void gc() = 0;
+#endif
 };
 
 inline ISwapImpl::~ISwapImpl() = default;

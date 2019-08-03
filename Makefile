@@ -18,6 +18,7 @@ error \
 swap \
 regex \
 MandT \
+g \
 
 # leave above line blank
 
