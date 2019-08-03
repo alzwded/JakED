@@ -1444,6 +1444,12 @@ namespace CommandsImpl {
             g_state.swapfile.undo(inserted);
         }
     } // t
+
+    void g(Range r, std::string tail)
+    {
+        throw JakEDException("not implemented");
+    } // g
+
 } // namespace CommandsImpl
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -1475,6 +1481,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'l', &CommandsImpl::l },
     { 'm', &CommandsImpl::m },
     { 't', &CommandsImpl::t },
+    { 'g', &CommandsImpl::g },
 }; // Commands
 
 void exit_usage(char* msg, char* argv0)
