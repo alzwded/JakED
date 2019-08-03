@@ -36,7 +36,7 @@
                 ASSERT(!!g_state.swapfile.head());
                 ASSERT(!!g_state.swapfile.head()->next());
                 ASSERT(!!g_state.swapfile.head()->next()->next());
-                ASSERT(g_state.swapfile.head()->next()->next()->text() == "Line 2 ccb");
+                ASSERT(static_cast<std::string>(g_state.swapfile.head()->next()->next()->text()) == "Line 2 ccb");
             } TEST_RUN_END();
         } END_TEST();
 
@@ -52,7 +52,7 @@
                 ASSERT(!!g_state.swapfile.head());
                 ASSERT(!!g_state.swapfile.head()->next());
                 ASSERT(!!g_state.swapfile.head()->next()->next());
-                ASSERT(g_state.swapfile.head()->next()->next()->text() == "Line 2 ccb");
+                ASSERT(static_cast<std::string>(g_state.swapfile.head()->next()->next()->text()) == "Line 2 ccb");
             } TEST_RUN_END();
         } END_TEST();
 
@@ -67,7 +67,7 @@
                 ASSERT(g_state.line == 1);
                 ASSERT(!!g_state.swapfile.head());
                 ASSERT(!!g_state.swapfile.head()->next());
-                ASSERT(g_state.swapfile.head()->next()->text() == "Line 1 cca");
+                ASSERT(static_cast<std::string>(g_state.swapfile.head()->next()->text()) == "Line 1 cca");
             } TEST_RUN_END();
         } END_TEST();
 
@@ -82,7 +82,7 @@
                 ASSERT(g_state.line == 1);
                 ASSERT(!!g_state.swapfile.head());
                 ASSERT(!!g_state.swapfile.head()->next());
-                ASSERT(g_state.swapfile.head()->next()->text() == "Line 1 ccc");
+                ASSERT(static_cast<std::string>(g_state.swapfile.head()->next()->text()) == "Line 1 ccc");
             } TEST_RUN_END();
         } END_TEST();
 

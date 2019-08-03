@@ -158,7 +158,7 @@ Internals, Externals and Other Tasks
 ------------------------------------
 
 + [x] refactor string processing – done, implemented swapfile.
-  * [ ] refactor it again to use a byte array (required for multi-level undo support without reimagining the swapfile format)
+  * [x] refactor it again to use a byte array (required for multi-level undo support without reimagining the swapfile format) –we got pointers now, woot!
 + [x] scripting behaviour (cancel on error if !isatty)
 + [/] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM

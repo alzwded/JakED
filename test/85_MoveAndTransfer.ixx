@@ -2,14 +2,14 @@
             // registers are preserved
             ASSERT(g_state.registers.find('q') != g_state.registers.end());
             ASSERT(!!g_state.registers.at('q'));
-            ASSERT(g_state.registers.at('q')->text() == "Line 3");
+            ASSERT(static_cast<std::string>(g_state.registers.at('q')->text()) == "Line 3");
             ASSERT(g_state.registers.find('w') != g_state.registers.end());
             ASSERT(!!g_state.registers.at('w'));
-            ASSERT(g_state.registers.at('w')->text() == "Line 4");
+            ASSERT(static_cast<std::string>(g_state.registers.at('w')->text()) == "Line 4");
             ASSERT(g_state.registers.at('q')->next() == g_state.registers.at('w'));
             ASSERT(g_state.registers.find('e') != g_state.registers.end());
             ASSERT(!!g_state.registers.at('e'));
-            ASSERT(g_state.registers.at('e')->text() == "Line 5");
+            ASSERT(static_cast<std::string>(g_state.registers.at('e')->text()) == "Line 5");
             ASSERT(g_state.registers.at('w')->next() == g_state.registers.at('e'));
         };
 

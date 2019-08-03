@@ -14,6 +14,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include <string>
 #include <memory>
+#include <functional>
 
 #include "cprintf.h"
 
@@ -61,6 +62,50 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
             Executed 2c\nReplace line 1\nReplace line 2\n.
 */
 
+static constexpr uint16_t RefMagic = (uint16_t)-1;
+
+struct Text {
+    uint16_t size() const { return _size; }
+    uint8_t *const data() const { return _data; }
+    Text(uint16_t sz, uint8_t *d, std::function<void(void*)> freeFunc = std::function<void(void*)>(&nop) /* leave this nop; it's there for ISwapFile implementations */)
+        : _size(sz)
+        , _data(d)
+        , _free(freeFunc)
+    {}
+    Text(Text&& other)
+        : _size(0)
+        , _data(nullptr)
+        , _free(std::function<void(void*)>(&nop))
+    {
+        std::swap(_size, other._size);
+        std::swap(_data, other._data);
+        std::swap(_free, other._free);
+    }
+    Text& operator=(Text&& other)
+    {
+        _free(_data);
+        _size = 0;
+        _data = nullptr;
+        _free = std::function<void(void*)>(&nop);
+        std::swap(_size, other._size);
+        std::swap(_data, other._data);
+        std::swap(_free, other._free);
+        return *this;
+    }
+    static void nop(void*) {}
+    ~Text() { _free(_data); }
+    Text(Text const&) = delete;
+    Text& operator=(Text const&) = delete;
+    operator std::string() {
+        if(_size == RefMagic) throw std::runtime_error("attempting to dereference an indirect handle as an std::string");
+        return std::string((const char*)_data, (size_t)_size);
+    }
+private:
+    uint16_t _size;
+    uint8_t *_data;
+    std::function<void(void*)> _free;
+};
+
 struct ILine;
 struct LinePtr
 {
@@ -77,14 +122,30 @@ struct LinePtr
 };
 struct ILine
 {
+    // returns the length of the string, sz
     virtual size_t length() = 0;
-    virtual std::string text() = 0;
+    // returns the text of the string, char[sz]
+    virtual Text text() = 0;
+    // returns the linked line
     virtual LinePtr next() = 0;
+    // unlinks the next line
     inline void link() { return link(LinePtr()); }
+    // unlinks the next line
     inline void link(nullptr_t) { return link(LinePtr()); }
+    // links a line to this one
     virtual void link(LinePtr const& p) = 0;
+    // compare line refs
     virtual bool operator==(ILine const& other) const = 0;
+    // duplicates the handle
     virtual LinePtr Copy() = 0;
+    // returns a magic string used to create an indirect handle to this line
+    virtual Text ref() = 0;
+    // check if this LinePtr is an indirect handle
+    bool IsIndirectHandle() {
+        return length() == RefMagic;
+    }
+    // dereference an indirect handle
+    virtual LinePtr deref() = 0;
 };
 inline bool LinePtr::operator==(LinePtr const& right) const
 {
@@ -101,7 +162,7 @@ struct ISwapImpl
     virtual LinePtr head() = 0;
     virtual LinePtr cut() = 0;
     virtual LinePtr undo() = 0;
-    virtual LinePtr line(std::string const&) = 0;
+    virtual LinePtr line(Text const&) = 0;
     virtual LinePtr cut(LinePtr const&) = 0;
     virtual LinePtr undo(LinePtr const&) = 0;
 #if 0
@@ -149,7 +210,11 @@ public:
     LinePtr head();
     LinePtr cut();
     LinePtr undo();
-    LinePtr line(std::string const&);
+    LinePtr line(Text const&);
+    LinePtr line(std::string const& s)
+    {
+        return line(Text((uint16_t)s.size(), (uint8_t*)s.c_str()));
+    }
     LinePtr cut(LinePtr const&);
     LinePtr undo(LinePtr const&);
     /**

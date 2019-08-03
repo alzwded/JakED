@@ -245,3 +245,17 @@ We will perform a 3,5s/re/fm/ which will affect all lines 3 and 4 and error out 
 240 if ex                                   ; if an exception was set,
         ! throw ex                          ; reraise
 ```
+
+g/// undo support
+-----------------
+
+This command has a more involved undo algorithm:
+
+1. it creates a disconnected phantom list; let's call it the GLOB list; its text is `1,$c`;
+2. it iterates over the whole current state of the TEXT list; for each line, it creates an indirect handle (`Swapfile::line(LinePtr->ref())`) in order to save the current line order
+3. it then goes through [its normal behaviour](Global.md).
+4. it sets the UNDO head to the GLOB head
+
+On undo, normal stuff happens. You would expect to end up with gibberish, and you would be right if the present never got to that point in the future where the author implemented indirect handles and undo support.
+
+Actually, let's clarify some more how undo will work in the multilevel undo case: The `c` command is bullshit. It actually goes through the GLOB list and relinks the pointed-to line to be the next pointed-to line. After undo completes, the UNDS (undo stack) list head is popped and UNDO set to the next element. That's going to be interesting to implement.

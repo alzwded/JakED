@@ -561,7 +561,7 @@ namespace CommandsImpl {
             bool bomChecked = false;
             //g_state.nlines = 0;
             auto continueFrom = after->next();
-            cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (after->text().c_str()) : "<EOF>", (continueFrom) ? continueFrom->text().c_str() : "<EOF>");
+            cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (static_cast<std::string>(after->text()).c_str()) : "<EOF>", (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "<EOF>");
             while(!feof(f) && (c = fgetc(f)) != EOF) {
                 if(CtrlC()) {
                     cprintf<CPK::CTRLC>("r: ctrlc invoked while reading\n");
@@ -580,7 +580,7 @@ namespace CommandsImpl {
                         bomChecked = true;
                     }
                     auto inserted = g_state.swapfile.line(s);
-                    cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (inserted->text().c_str()));
+                    cprintf<CPK::r>("linking %s -> %s\n", ((after) ? static_cast<std::string>(after->text()).c_str() : "<EOF>"), (static_cast<std::string>(inserted->text()).c_str()));
                     after->link(inserted);
                     after = inserted;
                     ++g_state.nlines;
@@ -594,11 +594,11 @@ namespace CommandsImpl {
                 auto inserted = g_state.swapfile.line(line.str());
                 after->link(inserted);
                 after = inserted;
-                cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (inserted->text().c_str()));
+                cprintf<CPK::r>("linking %s -> %s\n", ((after) ? static_cast<std::string>(after->text()).c_str() : "<EOF>"), (static_cast<std::string>(inserted->text()).c_str()));
                 ++g_state.nlines;
             }
             after->link(continueFrom);
-            cprintf<CPK::r>("linking %s -> %s\n", ((after) ? after->text().c_str() : "<EOF>"), (continueFrom) ? (continueFrom->text().c_str()) : "<EOF>");
+            cprintf<CPK::r>("linking %s -> %s\n", ((after) ? static_cast<std::string>(after->text()).c_str() : "<EOF>"), (continueFrom) ? (static_cast<std::string>(continueFrom->text()).c_str()) : "<EOF>");
             fclose(f);
             g_state.dirty = true;
             g_state.line = range.second + g_state.nlines - originalNlines;
@@ -695,7 +695,7 @@ namespace CommandsImpl {
             if(tail[0] == 'n') {
                 ss << first++ << '\t';
             }
-            for(auto c : i->text()) {
+            for(auto c : static_cast<std::string>(i->text())) {
                 if(isprint((unsigned char)c)) {
                     if(c == '\t') {
                         ss << "\\t";
@@ -734,7 +734,7 @@ namespace CommandsImpl {
                              }
                     } // switch(c)
                 } // else if non printable
-            } // for(c:i->text())
+            } // for(c:static_cast<std::string>(i->text()))
             ss << '$' << std::endl;
             i = i->next();
             g_state.writeStringFn(ss.str());
@@ -757,7 +757,7 @@ namespace CommandsImpl {
             if(tail[0] == 'n') {
                 ss << first++ << '\t';
             }
-            ss << i->text() << std::endl;
+            ss << static_cast<std::string>(i->text()) << std::endl;
             i = i->next();
             g_state.writeStringFn(ss.str());
             if(CtrlC()) return;
@@ -788,7 +788,7 @@ namespace CommandsImpl {
                 && it->next())
         {
             it = it->next();
-            //printf("Marking: %d %s\n", idx, it->text().c_str());
+            //printf("Marking: %d %s\n", idx, static_cast<std::string>(it->text()).c_str());
         }
         g_state.registers[tail[0]] = it;
     } // k
@@ -835,14 +835,14 @@ namespace CommandsImpl {
         auto i1 = g_state.swapfile.head();
         auto first = r.first, second = r.second;
         while(first-- > 0) {
-            cprintf<CPK::W>("skipping %s\n", (i1) ? i1->text().c_str() : "<EOF>");
+            cprintf<CPK::W>("skipping %s\n", (i1) ? static_cast<std::string>(i1->text()).c_str() : "<EOF>");
             i1 = i1->next();
         }
-        if(i1) cprintf<CPK::W>("Writing from %s\n", i1->text().c_str());
+        if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
         while(second-- > 0 && i1) {
-            if(i1) cprintf<CPK::W>("Writing %s\n", i1->text().c_str());
+            if(i1) cprintf<CPK::W>("Writing %s\n", static_cast<std::string>(i1->text()).c_str());
             nBytes += i1->length() + strlen("\n");
-            fprintf(f, "%s\n", i1->text().c_str());
+            fprintf(f, "%s\n", static_cast<std::string>(i1->text()).c_str());
             i1 = i1->next();
         }
         fclose(f);
@@ -1020,8 +1020,8 @@ namespace CommandsImpl {
         auto oldLinesDup = (oldLines) ? oldLines->Copy() : LinePtr();
         std::stringstream ss;
         while(oldLines) {
-            cprintf<CPK::j>("%s\n", oldLines->text().c_str());
-            ss << oldLines->text();
+            cprintf<CPK::j>("%s\n", static_cast<std::string>(oldLines->text()).c_str());
+            ss << static_cast<std::string>(oldLines->text());
             if(oldLines->next()) ss << tail;
             oldLines = oldLines->next();
         }
@@ -1123,7 +1123,7 @@ namespace CommandsImpl {
                 ex = std::make_exception_ptr(JakEDException("Internal error - EOF encountered"));
                 break;
             }
-            auto cx = ax->text(); // 90
+            auto cx = static_cast<std::string>(ax->text()); // 90
             if(!std::regex_search(cx, g_state.regexp)) { // 100
                 ex = std::make_exception_ptr(JakEDException("Line does not match")); // 110
             }
@@ -1248,7 +1248,7 @@ namespace CommandsImpl {
         int lines = 0;
         it->link(cutBuffer);
         while(cutBuffer) {
-            auto line = g_state.swapfile.line(cutBuffer->text());
+            auto line = g_state.swapfile.line(static_cast<std::string>(cutBuffer->text()));
             line->link(nextOne);
             it->link(line);
             it = line;
@@ -1289,7 +1289,7 @@ namespace CommandsImpl {
         it = it->next();
         idx = r.second - r.first + 1;
         while(idx-- > 0 && it) {
-            auto line = g_state.swapfile.line(it->text());
+            auto line = g_state.swapfile.line(static_cast<std::string>(it->text()));
             cutHead->link(line);
             cutHead = line;
             ++linesYanked;
@@ -1426,7 +1426,7 @@ namespace CommandsImpl {
         while(count--
                 && it)
         {
-            auto inserted = g_state.swapfile.line(it->text());
+            auto inserted = g_state.swapfile.line(static_cast<std::string>(it->text()));
             inserted->link(afterThis->next());
             afterThis->link(inserted);
 
@@ -1651,8 +1651,8 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
     auto it = g_state.swapfile.head();
     size_t index = 0;
     while(it != found->second && it) {
-        cprintf<CPK::regs>("%zd [%s]\n", index+1,it->text().c_str());
-        cprintf<CPK::parser>("%zd [%s]\n", index+1,it->text().c_str());
+        cprintf<CPK::regs>("%zd [%s]\n", index+1,static_cast<std::string>(it->text()).c_str());
+        cprintf<CPK::parser>("%zd [%s]\n", index+1,static_cast<std::string>(it->text()).c_str());
         it = it->next();
         ++index;
     }
@@ -1835,7 +1835,7 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
     auto fromLine = g_state.line;
     int line = 0;
     cprintf<CPK::regex>("Finding line %d\n", fromLine);
-    while(ref && fromLine--) {
+    while(ref && (fromLine--)) {
         ++line;
         ref = ref->next();
         if(!ref) ref = g_state.swapfile.head()->next();
@@ -1843,7 +1843,7 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
             throw JakEDException("Interrupted");
         }
     }
-    cprintf<CPK::regex>("line %d == fromLine %d, text == %s\n", line, g_state.line, ref->text().c_str());
+    cprintf<CPK::regex>("line %d == fromLine %d, text == %s\n", line, g_state.line, static_cast<std::string>(ref->text()).c_str());
     auto it = ref->Copy();
     if(s[0] == '/') {
         cprintf<CPK::regex>("Searching forward\n");
@@ -1855,8 +1855,8 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 it = g_state.swapfile.head()->next();
                 line = 1;
             }
-            cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
-            if(std::regex_search(it->text(), g_state.regexp)) {
+            cprintf<CPK::regex>("Checking %s\n", static_cast<std::string>(it->text()).c_str());
+            if(std::regex_search(static_cast<std::string>(it->text()), g_state.regexp)) {
                 cprintf<CPK::regex>("Found at %d\n", line);
                 return std::make_tuple(line, i + 1);
             }
@@ -1878,8 +1878,8 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 cprintf<CPK::regex>("Vising self once\n");
                 flag = true;
             }
-            cprintf<CPK::regex>("Checking %s\n", it->text().c_str());
-            if(std::regex_search(it->text(), g_state.regexp)) {
+            cprintf<CPK::regex>("Checking %s\n", static_cast<std::string>(it->text()).c_str());
+            if(std::regex_search(static_cast<std::string>(it->text()), g_state.regexp)) {
                 cprintf<CPK::regex>("Found a match on line %d\n", line);
                 lastFound = line;
             }
