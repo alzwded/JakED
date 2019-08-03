@@ -259,3 +259,5 @@ This command has a more involved undo algorithm:
 On undo, normal stuff happens. You would expect to end up with gibberish, and you would be right if the present never got to that point in the future where the author implemented indirect handles and undo support.
 
 Actually, let's clarify some more how undo will work in the multilevel undo case: The `c` command is bullshit. It actually goes through the GLOB list and relinks the pointed-to line to be the next pointed-to line. After undo completes, the UNDS (undo stack) list head is popped and UNDO set to the next element. That's going to be interesting to implement.
+
+During `command-list`, `u` is initially set to NUL, but it is available inside one execution for undo marks set by the commands therein. At the end, the undo mark for the whole `g//` command is set. I hope my multi-level undo list will work this way. Maybe indirect handles can help.

@@ -1604,6 +1604,8 @@ namespace CommandsImpl {
 
             g_state.line = line;
             try {
+                // hide global undo mark
+                g_state.swapfile.undo(LinePtr());
                 for(auto&& commandLine : commandList) {
                     auto t = ParseCommand(commandLine);
                     cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
@@ -1622,12 +1624,16 @@ namespace CommandsImpl {
                     ExecuteCommand(t, "");
                     if(CtrlC()) throw std::runtime_error("Interrupted");
                 }
-                g_state.swapfile.undo(undoList);
                 dot = g_state.line;
             } catch(JakEDException& ex) {
                 // nop
                 cprintf<CPK::g>("Last command failed with %s\n", ex.what());
                 g_state.line = dot;
+            }
+            g_state.swapfile.undo(undoList); // restore global undo mark
+            if(CtrlC()) {
+                cprintf<CPK::g>("Interrupted\n");
+                throw JakEDException("Interrupted");
             }
         }
         cprintf<CPK::g>("Ended.\n");
