@@ -425,11 +425,7 @@ public:
         return std::make_shared<MappedLine>(file, offset);
     }
 
-    Text ref() override
-    {
-        static_assert(sizeof(decltype(offset)) <= sizeof(uint8_t*), "sizeof(offset) is bigger than pointer");
-        return Text(RefMagic, (uint8_t*)offset);
-    }
+    Text ref() override;
 
     LinePtr deref() override;
 };
@@ -706,7 +702,7 @@ public:
     LinePtr line(Text const& s) override
     {
         EnsureSize(LineBaseSize
-                + s.size());
+                + (s.size() == RefMagic ? (SIZE_T)sizeof(SIZE_T) : (SIZE_T)s.size()));
         Header* head = (Header*)(m_view);
 
         cprintf<CPK::swap>("[%p] Adding line to %zd\n", m_file, m_size);
@@ -840,10 +836,16 @@ inline void MappedLine::link(LinePtr const& p)
     }
 }
 
+inline Text MappedLine::ref()
+{
+    LineFormat* me = (LineFormat*)(file.m_view + offset);
+    return Text(RefMagic, (uint8_t*)&me->text[0]);
+}
+
 inline LinePtr MappedLine::deref()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    return std::make_shared<MappedLine>(file, (decltype(offset))me->text);
+    return std::make_shared<MappedLine>(file, *(decltype(offset)*)&me->text[0]);
 }
 
 class MemoryImpl : public FileImpl

@@ -292,10 +292,15 @@ void DEFINE_SUITES() {
     DEF_SUITE(90_System) {
 #       include "test/90_System.ixx"
     } END_SUITE();
+
+    DEF_SUITE(95_Global) {
+#       include "test/95_Global.ixx"
+    } END_SUITE();
 }
 
 VOID CALLBACK killSelf(PVOID lpParam, BOOLEAN TimerOrWaitFired)
 {
+    if(IsDebuggerPresent()) return;
     if(TimerOrWaitFired) {
         fprintf(stderr, "Test suite max time hit\n");
         fflush(stderr);

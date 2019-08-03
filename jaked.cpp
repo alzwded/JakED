@@ -525,6 +525,8 @@ std::tuple<Range, int> ParseRange(std::string const&, int i);
 // [Range, command, tail]
 std::tuple<Range, char, std::string> ParseCommand(std::string s);
 
+void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream);
+
 namespace CommandsImpl {
     void r(Range range, std::string tail)
     {
@@ -949,6 +951,7 @@ namespace CommandsImpl {
             false, false, false, false, false, false,
             false, false, false, false, false, false,
             false, false, false, false, false, false};
+        std::vector<std::list<LinePtr>::iterator> clobbered; // during g// execution
 
         size_t linesDeleted = 1;
         auto it = g_state.swapfile.head();
@@ -971,6 +974,9 @@ namespace CommandsImpl {
                     cprintf<CPK::d>("marking %c to erase\n", kv->first);
                     toErase[kv->first - 'a'] = true;
                 }
+            }
+            for(auto i = g_state.gLines.begin(); i != g_state.gLines.end(); ++i) {
+                if(*i == it) clobbered.push_back(i);
             }
             if(idx > 0) {
                 ++linesDeleted;
@@ -999,6 +1005,9 @@ namespace CommandsImpl {
                 cprintf<CPK::a>("erasing r%c\n", c);
                 g_state.registers.erase(g_state.registers.find(c));
             }
+        }
+        for(auto i : clobbered) {
+            g_state.gLines.erase(i);
         }
 
         g_state.dirty = true;
@@ -1064,6 +1073,7 @@ namespace CommandsImpl {
     // explains better what's what and why
     void s(Range r, std::string tail)
     {
+        // TODO clobber registers and gLines
         auto it = g_state.swapfile.head(); // 60
         int idx = r.first;
         while(idx-- > 1 && it) { // 60
@@ -1509,12 +1519,112 @@ namespace CommandsImpl {
         if(last > g_state.nlines) last = g_state.nlines;
         if(first > g_state.nlines) first = g_state.nlines;
         if(last < 1) last = 1;
+        cprintf<CPK::g>("Initial range is [%d,%d]\n", first, last);
+
+        auto savedDot = g_state.line;
+
+        // parse regex
+        g_state.line = first - 1;
+        if(g_state.line < 1) g_state.line = Range::Dollar();
+        int i = 0;
+        int nextMatch = 0;
+        try {
+            cprintf<CPK::g>("Testing regex %s\n", tail.c_str());
+            std::tie(nextMatch, i) = ParseRegex(tail, i);
+            g_state.line = nextMatch;
+            cprintf<CPK::g>("Next line is @%d\n", nextMatch);
+        } catch(JakEDException& ex) {
+            cprintf<CPK::g>("Regex failed\n");
+            g_state.line = savedDot;
+            if(CtrlC()) {
+                g_state.line = savedDot;
+                throw JakEDException("Interrupted");
+            }
+            return;
+        }
 
         // acquire out command list
-        auto commandList = ReadCommandList(tail);
+        auto commandList = ReadCommandList(tail.substr(i));
 
         // mark lines we'll be processing, and save undo lines as well
-        throw JakEDException("Not implemented");
+        auto undoList = g_state.swapfile.line("1,$c");
+        g_state.swapfile.undo(undoList);
+        {
+            auto undoHead = undoList;
+            auto it = g_state.swapfile.head();
+            int idx = 0;
+            while(it->next()) {
+                it = it->next();
+                ++idx;
+                if(idx == nextMatch && nextMatch >= first && nextMatch <= last) {
+                    g_state.gLines.push_back(it);
+                    cprintf<CPK::g>("Will work with line %d = %s, so far I have %zd\n",
+                            idx,
+                            static_cast<std::string>(it->text()).c_str(),
+                            g_state.gLines.size());
+                    try {
+                        std::tie(nextMatch, i) = ParseRegex("//", 0); 
+                        g_state.line = nextMatch;
+                        cprintf<CPK::g>("Next line is @%d\n", nextMatch);
+                    } catch(JakEDException& ex) {
+                        nextMatch = 0;
+                        cprintf<CPK::g>("No more match\n");
+                        if(CtrlC()) {
+                            g_state.line = savedDot;
+                            throw JakEDException("Interrupted");
+                        }
+                    }
+                }
+                auto inserted = g_state.swapfile.line(it->ref());
+                undoHead->link(inserted);
+                undoHead = inserted;
+            }
+            if(CtrlC()) {
+                g_state.line = savedDot;
+                throw JakEDException("Interrupted");
+            }
+        }
+
+        while(!g_state.gLines.empty()) {
+            // pop head
+            auto lp = g_state.gLines.front()->Copy();
+            g_state.gLines.pop_front();
+            // set dot
+            auto it = g_state.swapfile.head();
+            int line = 0;
+            while(it && it != lp) {
+                ++line;
+                it = it->next();
+            }
+            cprintf<CPK::g>("Will work with line %s which is now No. %d\n",
+                    static_cast<std::string>(it->text()).c_str(),
+                    line);
+            if(!it) continue;
+
+            g_state.line = line;
+            try {
+                for(auto&& t : commandList) {
+                    cprintf<CPK::g>("Executing %d,%d%c%s\n",
+                            std::get<0>(t).first,
+                            std::get<0>(t).second,
+                            std::get<1>(t),
+                            std::get<2>(t).c_str());
+                    switch(std::get<1>(t)) {
+                    case 'a':
+                    case 'i':
+                    case 'c':
+                        cprintf<CPK::g>("aci are not supported yet\n");
+                        throw JakEDException("Not implemented");
+                    }
+                    ExecuteCommand(t, "");
+                }
+                g_state.swapfile.undo(undoList);
+            } catch(JakEDException& ex) {
+                // nop
+                cprintf<CPK::g>("Last command failed with %s\n", ex.what());
+            }
+        }
+        cprintf<CPK::g>("Ended.\n");
     } // g
 
 } // namespace CommandsImpl
@@ -1550,6 +1660,11 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 't', &CommandsImpl::t },
     { 'g', &CommandsImpl::g },
 }; // Commands
+
+void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
+{
+    Commands.at(std::get<1>(command))(std::get<0>(command), std::get<2>(command));
+}
 
 void exit_usage(char* msg, char* argv0)
 {
