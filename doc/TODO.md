@@ -31,13 +31,15 @@ Regex
 + [ ] G//
 + [ ] v//
 + [ ] V//
-+ [x] s//
-+ [x] s//g
-+ [ ] s//N (replace only Nth match)
-+ [ ] s//p
-+ [ ] s//gp
-+ [ ] s//Np
-+ [ ] s
++ [x] s///
++ [x] s///g
++ [x] s///N (replace only Nth match)
++ [x] s///p
++ [x] s///gp
++ [x] s///Np
++ [x] s
++ [x] s/re/fmt (= s/re/fmt/p)
++ [ ] s/re/ (special case, where previous fmt is kept and p is implied)
 
 Display
 -------

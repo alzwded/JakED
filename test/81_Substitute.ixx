@@ -248,3 +248,193 @@
                 fn.Assert();
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(SubstituteNth) {
+            auto fn = WriteFn({
+                "Li*e 2 aab",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), R"(/./*/3)");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteNthAndPrint) {
+            auto fn = WriteFn({
+                "n",
+                "Li*e 2 aab",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), R"(/./*/3p)");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteAllAndPrint) {
+            auto fn = WriteFn({
+                "Line 2 aab",
+                "**********",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), R"(/./*/gp)");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteFirstAndPrint) {
+            auto fn = WriteFn({
+                "L",
+                "*ine 2 aab",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), R"(/./*/p)");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteItsComplicatedAndPrint) {
+            auto fn = WriteFn({
+                "ine 2 a",
+                "L 2 aab",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), R"(/..e\( [0-9 ]*\(a\)\)/\1/p)");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteItsComplicatedGloballyAndPrint) {
+            auto fn = WriteFn({
+                "ne 5ab a",
+                "Li 5  a",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(5), R"(/..\( \+\(.\)\)/\1/gp)");
+                ASSERT(g_state.line == 5);
+                Commands.at('p')(Range::S(5), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteItsComplicatedSecondAndPrint) {
+            auto fn = WriteFn({
+                "ab a",
+                "Line 5  a",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(5), R"(/..\( \+\(.\)\)/\1/2p)");
+                ASSERT(g_state.line == 5);
+                Commands.at('p')(Range::S(5), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(SubstituteItsComplicatedFirstAndPrint) {
+            auto fn = WriteFn({
+                "ne 5",
+                "Li 5 ab a",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(5), R"(/..\( \+\(.\)\)/\1/1p)");
+                ASSERT(g_state.line == 5);
+                Commands.at('p')(Range::S(5), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(TestRepeat) {
+            auto fn = WriteFn({
+                "L*n* 2 **b",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+                g_state.regexp = std::regex(R"([aeiou])", std::regex_constants::ECMAScript);
+                g_state.fmt = R"(*/g)";
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(2), "");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(TestSSetsRepeat) {
+            auto fn = WriteFn({
+                "L*n* 2 **b",
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(1), R"(/[aeiou]/*/g)");
+                Commands.at('s')(Range::S(2), "");
+                ASSERT(g_state.line == 2);
+                Commands.at('p')(Range::S(2), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
