@@ -1467,49 +1467,49 @@ namespace CommandsImpl {
     } // t
 
     // TODO move this to be part of the parser instead of part of the g// family
-    std::vector<std::tuple<Range, char, std::string>> ReadCommandList(std::optional<std::string> first = std::nullopt)
+    std::vector<std::string> ReadMultipleLines(std::optional<std::string> first = std::nullopt)
     {
         bool readMore = false;
-        decltype(ReadCommandList(first)) rval;
+        decltype(ReadMultipleLines(first)) rval;
         if(first) {
             auto t = ParseCommand(*first);
-            if(std::get<2>(t)[std::get<2>(t).size() - 1] == '\\')
+            if((*first)[(*first).size() - 1] == '\\')
             {
-                std::get<2>(t) = std::get<2>(t).substr(0, std::get<2>(t).size() - 1);
+                (*first) = (*first).substr(0, (*first).size() - 1);
                 readMore = true;
             }
-            rval.push_back(t);
+            rval.push_back(*first);
         }
         while(readMore) {
             if(CtrlC()) throw std::runtime_error("Interrupted");
-            std::stringstream line;
+            std::stringstream buf;
             int ii = 0;
             while((ii = g_state.readCharFn()) != EOF) {
                 cprintf<CPK::g>("ii%d\n", ii);
                 char c = (char)(ii & 0xFF);
-                // If we got interrupted, clear the line buffer
+                // If we got interrupted, clear the buf buffer
                 if(CtrlC()) {
                     throw JakEDException("Interrupted");
                 }
                 //cprintf<CPK::g>("Read %x\n", c);
                 if(c == '\n') break;
-                line << c;
+                buf << c;
             } // read loop
-            cprintf<CPK::g>("Read: %s\n", line.str().c_str());
-            auto t = ParseCommand(line.str());
-            cprintf<CPK::g>("Parsed: [%d,%d]%c%s\n", std::get<0>(t).first, std::get<0>(t).second, std::get<1>(t), std::get<2>(t).c_str());
-            if(std::get<2>(t)[std::get<2>(t).size() - 1] == '\\')
+            cprintf<CPK::g>("Read: %s\n", buf.str().c_str());
+            auto line = buf.str();
+            if(line[line.size() - 1] == '\\')
             {
                 cprintf<CPK::g>("Reading more\n");
-                std::get<2>(t) = std::get<2>(t).substr(0, std::get<2>(t).size() - 1);
+                line = line.substr(0, line.size() - 1);
                 readMore = true;
             } else {
                 readMore = false;
             }
-            rval.push_back(t);
+            rval.push_back(line);
         } // while(readMore)
         return rval;
-    } // ReadCommandList
+
+    } // ReadMultipleLines
 
     void g(Range r, std::string tail)
     {
@@ -1544,7 +1544,7 @@ namespace CommandsImpl {
         }
 
         // acquire out command list
-        auto commandList = ReadCommandList(tail.substr(i));
+        auto commandList = ReadMultipleLines(tail.substr(i));
 
         // mark lines we'll be processing, and save undo lines as well
         auto undoList = g_state.swapfile.line("1,$c");
@@ -1586,6 +1586,7 @@ namespace CommandsImpl {
         }
 
         while(!g_state.gLines.empty()) {
+            auto dot = g_state.line;
             // pop head
             auto lp = g_state.gLines.front()->Copy();
             g_state.gLines.pop_front();
@@ -1603,12 +1604,14 @@ namespace CommandsImpl {
 
             g_state.line = line;
             try {
-                for(auto&& t : commandList) {
-                    cprintf<CPK::g>("Executing %d,%d%c%s\n",
+                for(auto&& commandLine : commandList) {
+                    auto t = ParseCommand(commandLine);
+                    cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
                             std::get<0>(t).first,
                             std::get<0>(t).second,
                             std::get<1>(t),
                             std::get<2>(t).c_str());
+
                     switch(std::get<1>(t)) {
                     case 'a':
                     case 'i':
@@ -1617,11 +1620,14 @@ namespace CommandsImpl {
                         throw JakEDException("Not implemented");
                     }
                     ExecuteCommand(t, "");
+                    if(CtrlC()) throw std::runtime_error("Interrupted");
                 }
                 g_state.swapfile.undo(undoList);
+                dot = g_state.line;
             } catch(JakEDException& ex) {
                 // nop
                 cprintf<CPK::g>("Last command failed with %s\n", ex.what());
+                g_state.line = dot;
             }
         }
         cprintf<CPK::g>("Ended.\n");

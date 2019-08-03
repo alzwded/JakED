@@ -26,6 +26,7 @@
 
         DEF_TEST(SuccessfulGSall) {
             auto fn = WriteFn({
+                "10",
                 "eniL 1 aaa",
                 "eniL 2 aab",
                 "eniL 3 aba",
@@ -41,6 +42,85 @@
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
                     auto s = R"(g/Line/s/\(L\)\(i\)\(n\)\(e\)/\4\3\2\1/
+.=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(GSallIsSuccessfulHalfOfTheTime) {
+            auto fn = WriteFn({
+                "9",
+                "eniL 1 aaa",
+                "Line 2 aab",
+                "eniL 3 aba",
+                "Line 4 a a",
+                "eniL 5 ab a",
+                "Line 6 a ba",
+                "eniL 7 a b a",
+                "Line 8 b aa",
+                "eniL 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/Line/s/\(L\)\(i\)\(n\)\(e\)\( [13579] \)/\4\3\2\1\5/
+.=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(GSallIsSuccessfulHalfOfTheTimeWithExtraPrint) {
+            auto fn = WriteFn({
+                "eniL 1 aaa",
+                "eniL 3 aba",
+                "eniL 5 ab a",
+                "eniL 7 a b a",
+                "eniL 9 aa b",
+                "9",
+                "eniL 1 aaa",
+                "Line 2 aab",
+                "eniL 3 aba",
+                "Line 4 a a",
+                "eniL 5 ab a",
+                "Line 6 a ba",
+                "eniL 7 a b a",
+                "Line 8 b aa",
+                "eniL 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/Line/s/\(L\)\(i\)\(n\)\(e\)\( [13579] \)/\4\3\2\1\5/\
+.p
+.=
 ,p
 )";
                     if(*state >= strlen(s)) return EOF;
