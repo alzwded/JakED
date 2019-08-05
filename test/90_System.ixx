@@ -631,6 +631,52 @@ z
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(zScrollingWithTailParsesCorrectly) {
+            auto numLinesRead = std::make_shared<int>(0);
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // # starting to look cryptic
+                    auto s = R"(E test\tenlines.txt
+1z3
+z3n
+zn
+z
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = [numLinesRead](std::string const& s) {
+                    (*numLinesRead)++;
+                    switch(*numLinesRead) {
+                    case 1: break; // byte count
+                    case 2: ASSERT(s == "Line 1\n"); break;
+                    case 3: ASSERT(s == "Line 2\n"); break;
+                    case 4: ASSERT(s == "Line 3\n"); break;
+                    case 5: ASSERT(s == "4\tLine 4\n"); break;
+                    case 6: ASSERT(s == "5\tLine 5\n"); break;
+                    case 7: ASSERT(s == "6\tLine 6\n"); break;
+                    case 8: ASSERT(s == "7\tLine 7\n"); break;
+                    case 9: ASSERT(s == "8\tLine 8\n"); break;
+                    case 10: ASSERT(s == "9\tLine 9\n"); break;
+                    case 11: ASSERT(s == "Line 10\n"); break;
+                    default:
+                        fprintf(stderr, "Extra string: %s", s.c_str());
+                        ASSERT(!"should not print so much");
+                        break;
+                    }
+                };
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Loop();
+                ASSERT( (*numLinesRead) == 11);
+            } TEST_RUN_END();
+        } END_TEST();
+
+
         DEF_TEST(InsertPreservesRegisters) {
             auto numLinesRead = std::make_shared<int>(0);
             TEST_SETUP() {

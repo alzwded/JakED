@@ -880,14 +880,16 @@ namespace CommandsImpl {
     void z(Range r, std::string tail)
     {
         tail = tail.substr(SkipWS(tail, 0));
+        int i = 0;
         if(!tail.empty()) {
             int newWindowSize = 0;
-            int i = 0;
             std::tie(newWindowSize, i) = ReadNumber(tail, 0);
-            if(i == 0 || newWindowSize <= 0) throw JakEDException("Parse error: invalid window size");
-            g_state.zWindow = newWindowSize;
+            if(i > 0) {
+                if(newWindowSize <= 0) throw JakEDException("Parse error: invalid window size");
+                g_state.zWindow = newWindowSize;
+            }
         }
-        p(Range::R(r.second, r.second + g_state.zWindow - 1), "");
+        p(Range::R(r.second, r.second + g_state.zWindow - 1), tail.substr(i));
     } // z
 
     void a(Range r, std::string)
