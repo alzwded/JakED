@@ -156,6 +156,7 @@ I/O
 + [ ] f !sh
 + [ ] e !sh
 + [ ] w !sh
++ [ ] wr !sh, rw !sh    (extension to filter text through external command)
 
 Internals, Externals and Other Tasks
 ------------------------------------
