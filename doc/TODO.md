@@ -167,7 +167,7 @@ Internals, Externals and Other Tasks
 + [x] utf8 with BOM
 + [ ] command line argument for P
 + [ ] arg: `-s` (suppress diagnostics)
-+ [ ] start with empty file
++ [x] start with empty file
 + [ ] jaked --help
 + [ ] jaked --version
 + [ ] some nice html documentation, like `ed`'s man page

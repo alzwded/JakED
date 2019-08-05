@@ -2245,9 +2245,9 @@ int main(int argc, char* argv[])
     }
     at_quick_exit(RestoreConsoleCP);
 
-    if(argc == 1) {
-        exit_usage("No such file!", argv[0]);
-    }
+    //if(argc == 1) {
+    //    exit_usage("No such file!", argv[0]);
+    //}
 
     if(argc > 2) {
         exit_usage("Too many arguments!", argv[0]);
@@ -2262,10 +2262,12 @@ int main(int argc, char* argv[])
     g_state.readCharFn = Interactive_readCharFn;
     g_state.writeStringFn = &Interactive_writeStringFn;
 
-    std::string file = argv[1];
-    if(file.empty()) exit_usage("No such file!", argv[0]);
-    Commands.at('r')(Range::ZERO(), file);
-    g_state.dirty = false;
+    if(argc > 1) {
+        std::string file = argv[1];
+        if(file.empty()) exit_usage("No such file!", argv[0]);
+        Commands.at('r')(Range::ZERO(), file);
+        g_state.dirty = false;
+    }
 
     Loop();
     return 0;
