@@ -51,6 +51,8 @@ Display
 + [x] .,.pn
 + [x] .,.n
 + [x] zN
+  * [ ] zNp
+  * [ ] zp (use stored N)
 + [x] =
 + [x] <CR>
 + [x] ~~Interactive write string prints UTF16 so that conhost shows unicode properly~~ print out UTF8 correctly
