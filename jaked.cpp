@@ -517,7 +517,7 @@ int SkipWS(std::string const& s, int i)
 // [number, continueFrom]
 std::tuple<int, int> ReadNumber(std::string const&, int);
 // [line, continueFrom]
-template<bool reverse = false>
+template<bool acceptNoMatches = false>
 std::tuple<int, int> ParseRegex(std::string s, int i);
 // [fmt, G_OR_N, printLine]
 std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i);
@@ -1635,9 +1635,7 @@ namespace CommandsImpl {
             if(!it) continue;
 
             if constexpr(!!(flags & GFlags::Interactive)) {
-                std::stringstream line;
-                line << ((std::string)it->text()) << std::endl;
-                g_state.writeStringFn(line.str());
+                g_state.writeStringFn(static_cast<std::string>(it->text()) + "\n");
             }
 
             g_state.line = line;
@@ -1896,7 +1894,7 @@ std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i)
     return std::make_tuple(fmt, G_OR_N, print);
 } // ParseReplaceFormat
 
-template<bool reverse>
+template<bool acceptNoMatches>
 std::tuple<int, int> ParseRegex(std::string s, int i)
 {
     if(s[0] != '/' && s[0] != '?') throw JakEDException("Internal parse error: expected regex to start with / or ?");
@@ -2047,8 +2045,8 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 break;
             }
             if(it == ref) {
-                if constexpr(reverse) {
-                    cprintf<CPK::regex>("Reverse match not found\n", line);
+                if constexpr(acceptNoMatches) {
+                    cprintf<CPK::regex>("Reverse match not found\n");
                     return std::make_tuple(-1, i + 1);
                 } else {
                     throw JakEDException("Pattern not found");
@@ -2084,8 +2082,8 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 line = 1;
             }
         } // while(it)
-        if constexpr(reverse) {
-            cprintf<CPK::regex>("Reverse match not found\n", line);
+        if constexpr(acceptNoMatches) {
+            cprintf<CPK::regex>("Reverse match not found\n");
             return std::make_tuple(-1, i + 1);
         } else {
             if(lastFound == 0) throw JakEDException("Pattern not found");
