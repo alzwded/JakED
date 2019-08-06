@@ -29,9 +29,9 @@ Regex
   * [x] mutiline "command-list"
   * [ ] a, i and c support
   * [x] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
-+ [ ] G//
-+ [ ] v//
-+ [ ] V//
++ [x] G//
++ [x] v//
++ [x] V//
 + [x] s///
 + [x] s///g
 + [x] s///N (replace only Nth match)

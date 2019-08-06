@@ -1475,7 +1475,6 @@ namespace CommandsImpl {
         bool readMore = false;
         decltype(ReadMultipleLines(first)) rval;
         if(first) {
-            auto t = ParseCommand(*first);
             if((*first)[(*first).size() - 1] == '\\')
             {
                 (*first) = (*first).substr(0, (*first).size() - 1);
@@ -1635,13 +1634,21 @@ namespace CommandsImpl {
                     line);
             if(!it) continue;
 
+            if constexpr(!!(flags & GFlags::Interactive)) {
+                std::stringstream line;
+                line << ((std::string)it->text()) << std::endl;
+                g_state.writeStringFn(line.str());
+            }
+
             g_state.line = line;
             try {
                 // hide global undo mark
                 g_state.swapfile.undo(LinePtr());
                 if constexpr((flags & GFlags::Interactive) != 0) {
                     // acquire out command list
-                    commandList = ReadMultipleLines(tail.substr(i));
+                    auto fakeCommandList = ReadMultipleLines("\\");
+                    commandList = decltype(commandList)(fakeCommandList.begin() + 1, fakeCommandList.end());
+                    if(commandList.size() == 1 && commandList.front() == "") commandList = decltype(commandList){};
                 }
                 for(auto&& commandLine : commandList) {
                     auto t = ParseCommand(commandLine);
@@ -2039,11 +2046,13 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
             if(CtrlC()) {
                 break;
             }
-            if constexpr(reverse) {
-                cprintf<CPK::regex>("Reverse match not found\n", line);
-                return std::make_tuple(-1, i + 1);
-            } else {
-                if(it == ref) throw JakEDException("Pattern not found");
+            if(it == ref) {
+                if constexpr(reverse) {
+                    cprintf<CPK::regex>("Reverse match not found\n", line);
+                    return std::make_tuple(-1, i + 1);
+                } else {
+                    throw JakEDException("Pattern not found");
+                }
             }
         }
     } else { // if s[0] != '/', i.e. it's '?'
