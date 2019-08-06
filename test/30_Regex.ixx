@@ -293,3 +293,32 @@
                 ASSERT(i == 5);
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(acceptFailuresNothingFound) {
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                int pos;
+                int i = 0;
+                std::tie(pos, i) = ParseRegex<true>("/xXxXxX/d", i);
+                ASSERT(pos < 0 || pos > 10);
+                ASSERT(i == 8);
+                ASSERT("/xXxXxX/d"[i] == 'd');
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(acceptFailuresSomethingFound) {
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                int pos;
+                int i = 0;
+                std::tie(pos, i) = ParseRegex<true>("/a ba/d", i);
+                ASSERT(pos == 6);
+                ASSERT(i == 6);
+                ASSERT("/a ba/d"[i] == 'd');
+            } TEST_RUN_END();
+        } END_TEST();
+
