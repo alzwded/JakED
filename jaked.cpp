@@ -517,6 +517,7 @@ int SkipWS(std::string const& s, int i)
 // [number, continueFrom]
 std::tuple<int, int> ReadNumber(std::string const&, int);
 // [line, continueFrom]
+template<bool reverse = false>
 std::tuple<int, int> ParseRegex(std::string s, int i);
 // [fmt, G_OR_N, printLine]
 std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i);
@@ -1513,7 +1514,26 @@ namespace CommandsImpl {
 
     } // ReadMultipleLines
 
-    void g(Range r, std::string tail)
+    struct GFlags {
+        enum {
+            None = 0,
+            Interactive = (1 << 0),
+            Reverse = (1 << 1)
+        };
+
+        template<int flags>
+        constexpr static bool TestLine(int left, int right)
+        {
+            if constexpr((flags & Reverse) == 0) {
+                return left == right;
+            } else {
+                return !(left == right);
+            }
+        }
+    };
+
+    template<int flags>
+    void gImpl(Range r, std::string tail)
     {
         int first = r.first,
             last = r.second;
@@ -1532,7 +1552,7 @@ namespace CommandsImpl {
         int nextMatch = 0;
         try {
             cprintf<CPK::g>("Testing regex %s\n", tail.c_str());
-            std::tie(nextMatch, i) = ParseRegex(tail, i);
+            std::tie(nextMatch, i) = ParseRegex<!!(flags & GFlags::Reverse)>(tail, i);
             g_state.line = nextMatch;
             cprintf<CPK::g>("Next line is @%d\n", nextMatch);
         } catch(JakEDException& ex) {
@@ -1542,11 +1562,20 @@ namespace CommandsImpl {
                 g_state.line = savedDot;
                 throw JakEDException("Interrupted");
             }
-            return;
+            if constexpr((flags & GFlags::Reverse) == 0) {
+                cprintf<CPK::g>("Done\n");
+                return;
+            } else {
+                cprintf<CPK::g>("Setting next match to -1\n");
+                nextMatch = -1;
+            }
         }
 
-        // acquire out command list
-        auto commandList = ReadMultipleLines(tail.substr(i));
+        decltype(ReadMultipleLines(tail.substr(i))) commandList;
+        if constexpr((flags & GFlags::Interactive) == 0) {
+            // acquire out command list
+            commandList = ReadMultipleLines(tail.substr(i));
+        }
 
         // mark lines we'll be processing, and save undo lines as well
         auto undoList = g_state.swapfile.line("1,$c");
@@ -1558,24 +1587,26 @@ namespace CommandsImpl {
             while(it->next()) {
                 it = it->next();
                 ++idx;
-                if(idx == nextMatch && nextMatch >= first && nextMatch <= last) {
+                if(GFlags::TestLine<flags>(idx, nextMatch) && idx >= first && idx <= last) {
                     g_state.gLines.push_back(it);
                     cprintf<CPK::g>("Will work with line %d = %s, so far I have %zd\n",
                             idx,
                             static_cast<std::string>(it->text()).c_str(),
                             g_state.gLines.size());
+                }
+                if(idx == nextMatch && nextMatch >= first && nextMatch <= last) {
                     try {
-                        std::tie(nextMatch, i) = ParseRegex("//", 0); 
+                        std::tie(nextMatch, i) = ParseRegex<!!(flags & GFlags::Reverse)>("//", 0); 
                         g_state.line = nextMatch;
                         cprintf<CPK::g>("Next line is @%d\n", nextMatch);
                     } catch(JakEDException& ex) {
                         nextMatch = 0;
                         cprintf<CPK::g>("No more match\n");
-                        if(CtrlC()) {
-                            g_state.line = savedDot;
-                            throw JakEDException("Interrupted");
-                        }
                     }
+                }
+                if(CtrlC()) {
+                    g_state.line = savedDot;
+                    throw JakEDException("Interrupted");
                 }
                 auto inserted = g_state.swapfile.line(it->ref());
                 undoHead->link(inserted);
@@ -1608,6 +1639,10 @@ namespace CommandsImpl {
             try {
                 // hide global undo mark
                 g_state.swapfile.undo(LinePtr());
+                if constexpr((flags & GFlags::Interactive) != 0) {
+                    // acquire out command list
+                    commandList = ReadMultipleLines(tail.substr(i));
+                }
                 for(auto&& commandLine : commandList) {
                     auto t = ParseCommand(commandLine);
                     cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
@@ -1615,6 +1650,14 @@ namespace CommandsImpl {
                             std::get<0>(t).second,
                             std::get<1>(t),
                             std::get<2>(t).c_str());
+
+                    switch(std::get<1>(t)) {
+                    case 'g':
+                    case 'G':
+                    case 'v':
+                    case 'V':
+                        throw JakEDException("gGvV are not supported in gGvV command-list");
+                    }
 
                     switch(std::get<1>(t)) {
                     case 'a':
@@ -1672,7 +1715,10 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'l', &CommandsImpl::l },
     { 'm', &CommandsImpl::m },
     { 't', &CommandsImpl::t },
-    { 'g', &CommandsImpl::g },
+    { 'g', &CommandsImpl::gImpl<CommandsImpl::GFlags::None> },
+    { 'v', &CommandsImpl::gImpl<CommandsImpl::GFlags::Reverse> },
+    { 'G', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive> },
+    { 'V', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive|CommandsImpl::GFlags::Reverse> },
 }; // Commands
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
@@ -1843,6 +1889,7 @@ std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i)
     return std::make_tuple(fmt, G_OR_N, print);
 } // ParseReplaceFormat
 
+template<bool reverse>
 std::tuple<int, int> ParseRegex(std::string s, int i)
 {
     if(s[0] != '/' && s[0] != '?') throw JakEDException("Internal parse error: expected regex to start with / or ?");
@@ -1992,7 +2039,12 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
             if(CtrlC()) {
                 break;
             }
-            if(it == ref) throw JakEDException("Pattern not found");
+            if constexpr(reverse) {
+                cprintf<CPK::regex>("Reverse match not found\n", line);
+                return std::make_tuple(-1, i + 1);
+            } else {
+                if(it == ref) throw JakEDException("Pattern not found");
+            }
         }
     } else { // if s[0] != '/', i.e. it's '?'
         cprintf<CPK::regex>("Searching backwards\n");
@@ -2023,7 +2075,12 @@ std::tuple<int, int> ParseRegex(std::string s, int i)
                 line = 1;
             }
         } // while(it)
-        if(lastFound == 0) throw JakEDException("Pattern not found");
+        if constexpr(reverse) {
+            cprintf<CPK::regex>("Reverse match not found\n", line);
+            return std::make_tuple(-1, i + 1);
+        } else {
+            if(lastFound == 0) throw JakEDException("Pattern not found");
+        }
         cprintf<CPK::regex>("Sticking with match on line %d\n", lastFound);
         return std::make_tuple(lastFound, i + 1);
     } // else if s[0] != '/'
