@@ -26,6 +26,40 @@
 
         // ======================== g ================================
 
+        DEF_TEST(gSRepeat) {
+            auto fn = WriteFn({
+                "eniL 1 aaa",
+                "eniL 2 aab",
+                "eniL 3 aba",
+                "eniL 4 a a",
+                "eniL 5 ab a",
+                "eniL 6 a ba",
+                "eniL 7 a b a",
+                "eniL 8 b aa",
+                "eniL 9 aa b",
+                "eniL 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/Line/s//eniL/
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
         DEF_TEST(SuccessfulGSall) {
             auto fn = WriteFn({
                 "10",
@@ -630,3 +664,195 @@ d
                 fn.Assert();
             } TEST_RUN_END();
         } END_TEST();
+
+        // ======================== g with aci =======================
+
+        DEF_TEST(gAppendWrongButTestsA) {
+            auto fn = WriteFn({
+                "11",
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 2.1",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    // N.b: the following command is wrong, there should
+                    // be a backslash after Line 2.1 and a single dot
+                    // on the next line; this test covers an infinite
+                    // loop issue that should be avoided
+                    auto s = R"(g/Line 2/a\
+Line 2.1
+=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                //Commands.at('p')(Range::R(1, Range::Dollar()), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+
+        DEF_TEST(gAppend) {
+            auto fn = WriteFn({
+                "4",
+                "4",
+                "12",
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 2.1",
+                "Line 2.2",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/Line 2/a\
+Line 2.1\
+Line 2.2\
+.\
+.=
+.=
+=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(gAppendChange) {
+            auto fn = WriteFn({
+                "3",
+                "3",
+                "11",
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 2.2",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/Line 2/a\
+Line 2.1\
+.\
+c\
+Line 2.2\
+.\
+.=
+.=
+=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(gAppendInsert) {
+            auto fn = WriteFn({
+                "3",
+                "13",
+                "13",
+                "14",
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 2.1",
+                "Line 2.2",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 9 aa b",
+                "Line A",
+                "Line 2.1",
+                "Line 2.2",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(10c
+Line A
+.
+g/Line [2A]/a\
+Line 2.2\
+.\
+i\
+Line 2.1\
+.\
+.=
+.=
+=
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+

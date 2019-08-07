@@ -907,12 +907,13 @@ namespace CommandsImpl {
         size_t nLines = 0;
         std::stringstream ss;
         while(1) {
-            char c = g_state.readCharFn();
+            int cc = g_state.readCharFn();
+            char c = cc;
             cprintf<CPK::a>("read a %x %c\n", c, c);
             cprintf<CPK::a>("ss = %s\n", ss.str().c_str());
             if(CtrlC()) return;
-            if(c == '\n') {
-                if(ss.str() == ".") {
+            if(c == '\n' || cc == EOF) {
+                if(ss.str() == "." || (cc == EOF && ss.str() == "")) {
                     cprintf<CPK::a>("broke at .\n");
                     break;
                 }
@@ -1617,6 +1618,8 @@ namespace CommandsImpl {
             }
         }
 
+        decltype(g_state.readCharFn) prevReadCharFn;
+
         while(!g_state.gLines.empty()) {
             auto dot = g_state.line;
             // pop head
@@ -1648,7 +1651,11 @@ namespace CommandsImpl {
                     commandList = decltype(commandList)(fakeCommandList.begin() + 1, fakeCommandList.end());
                     if(commandList.size() == 1 && commandList.front() == "") commandList = decltype(commandList){};
                 }
-                for(auto&& commandLine : commandList) {
+                //for(auto&& commandLine : commandList) {
+                size_t increment = 1, index = 0;
+                for(size_t i = 0; i < commandList.size(); i+=increment) {
+                    auto&& commandLine = commandList[i];
+                    increment = 1;
                     auto t = ParseCommand(commandLine);
                     cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
                             std::get<0>(t).first,
@@ -1668,10 +1675,26 @@ namespace CommandsImpl {
                     case 'a':
                     case 'i':
                     case 'c':
-                        cprintf<CPK::g>("aci are not supported yet\n");
-                        throw JakEDException("Not implemented");
+                        index = 0;
+                        prevReadCharFn = g_state.readCharFn;
+                        g_state.readCharFn = std::function<int()>(
+                                [&increment, &commandList, i, &index]() -> int {
+                                if(i + increment >= commandList.size()) return EOF;
+                                if(index >= commandList[i + increment].size()) {
+                                    index = 0;
+                                    increment++;
+                                    return '\n';
+                                }
+                                if(i + increment >= commandList.size()) return EOF;
+                                return commandList[i + increment][index++];
+                        });
+                        break;
+                    default: break;
                     }
                     ExecuteCommand(t, "");
+                    if(prevReadCharFn) {
+                        g_state.readCharFn = prevReadCharFn;
+                    }
                     if(CtrlC()) throw std::runtime_error("Interrupted");
                 }
                 dot = g_state.line;
@@ -1681,6 +1704,10 @@ namespace CommandsImpl {
                 g_state.line = dot;
             }
             g_state.swapfile.undo(undoList); // restore global undo mark
+            if(prevReadCharFn) {
+                g_state.readCharFn = prevReadCharFn;
+                prevReadCharFn = decltype(g_state.readCharFn)();
+            }
             if(CtrlC()) {
                 cprintf<CPK::g>("Interrupted\n");
                 throw JakEDException("Interrupted");

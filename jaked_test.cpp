@@ -349,7 +349,16 @@ int main(int argc, char* argv[])
     if(suite) {
         HANDLE hTimer;
         int allowedMaxTime = suite->Timeout();
-        CreateTimerQueueTimer(&hTimer, NULL, &killSelf, NULL, allowedMaxTime, 0, WT_EXECUTEONLYONCE);
+        if(!IsDebuggerPresent()) {
+            CreateTimerQueueTimer(
+                    &hTimer,
+                    NULL, 
+                    &killSelf, 
+                    NULL, 
+                    allowedMaxTime, 
+                    0, 
+                    WT_EXECUTEONLYONCE);
+        }
 
         std::cout << "Running " << argv[1] << std::endl;
         std::cout << "---------------------------------" << std::endl;
