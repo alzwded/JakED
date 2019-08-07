@@ -855,4 +855,37 @@ Line 2.1\
             } TEST_RUN_END();
         } END_TEST();
 
+        // ======================== testUnacceptable ======================
+
+        DEF_TEST(gDoesntAcceptAnotherG) {
+            auto fn = WriteFn({
+                "?",
+                "?",
+                "Line 7 a b a",
+                "?",
+                "?"
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(.g/Line/g//p
+.g//v//p
+.G/Line/
+V//
+.v/xxx/G//
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
 

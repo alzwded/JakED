@@ -1484,7 +1484,7 @@ namespace CommandsImpl {
             rval.push_back(*first);
         }
         while(readMore) {
-            if(CtrlC()) throw std::runtime_error("Interrupted");
+            if(CtrlC()) throw JakEDException("Interrupted");
             std::stringstream buf;
             int ii = 0;
             while((ii = g_state.readCharFn()) != EOF) {
@@ -1544,6 +1544,7 @@ namespace CommandsImpl {
         cprintf<CPK::g>("Initial range is [%d,%d]\n", first, last);
 
         auto savedDot = g_state.line;
+        bool exitWithInvalidTail = false;
 
         // parse regex
         g_state.line = first - 1;
@@ -1620,7 +1621,7 @@ namespace CommandsImpl {
 
         decltype(g_state.readCharFn) prevReadCharFn;
 
-        while(!g_state.gLines.empty()) {
+        while(!g_state.gLines.empty() && !exitWithInvalidTail) {
             auto dot = g_state.line;
             // pop head
             auto lp = g_state.gLines.front()->Copy();
@@ -1653,7 +1654,7 @@ namespace CommandsImpl {
                 }
                 //for(auto&& commandLine : commandList) {
                 size_t increment = 1, index = 0;
-                for(size_t i = 0; i < commandList.size(); i+=increment) {
+                for(size_t i = 0; i < commandList.size() && !exitWithInvalidTail; i+=increment) {
                     auto&& commandLine = commandList[i];
                     increment = 1;
                     auto t = ParseCommand(commandLine);
@@ -1668,6 +1669,7 @@ namespace CommandsImpl {
                     case 'G':
                     case 'v':
                     case 'V':
+                        exitWithInvalidTail = true;
                         throw JakEDException("gGvV are not supported in gGvV command-list");
                     }
 
@@ -1694,8 +1696,9 @@ namespace CommandsImpl {
                     ExecuteCommand(t, "");
                     if(prevReadCharFn) {
                         g_state.readCharFn = prevReadCharFn;
+                        prevReadCharFn = decltype(g_state.readCharFn)();
                     }
-                    if(CtrlC()) throw std::runtime_error("Interrupted");
+                    if(CtrlC()) throw JakEDException("Interrupted");
                 }
                 dot = g_state.line;
             } catch(JakEDException& ex) {
@@ -1714,6 +1717,7 @@ namespace CommandsImpl {
             }
         }
         cprintf<CPK::g>("Ended.\n");
+        if(exitWithInvalidTail) throw JakEDException("The g, G, v and V commands may not appear in the command-list of a g, G, v or V command");
     } // g
 
 } // namespace CommandsImpl
@@ -2345,7 +2349,7 @@ int main(int argc, char* argv[])
     }
 
 #ifdef JAKED_DEBUG
-    if(std::string(argv[1]) == "-d") {
+    if(argc > 1 && std::string(argv[1]) == "-d") {
         __debugbreak();
     }
 #endif

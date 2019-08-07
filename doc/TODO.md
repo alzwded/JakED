@@ -32,6 +32,7 @@ Regex
 + [x] G//
 + [x] v//
 + [x] V//
++ [ ] g, v, G, V no-regex shortcuts (can't cope with lack of tail)
 + [x] s///
 + [x] s///g
 + [x] s///N (replace only Nth match)
