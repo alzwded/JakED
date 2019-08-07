@@ -1653,9 +1653,9 @@ namespace CommandsImpl {
                     if(commandList.size() == 1 && commandList.front() == "") commandList = decltype(commandList){};
                 }
                 //for(auto&& commandLine : commandList) {
-                size_t increment = 1, index = 0;
-                for(size_t i = 0; i < commandList.size() && !exitWithInvalidTail; i+=increment) {
-                    auto&& commandLine = commandList[i];
+                size_t increment = 1, state = 0;
+                for(size_t index = 0; index < commandList.size() && !exitWithInvalidTail; index+=increment) {
+                    auto&& commandLine = commandList[index];
                     increment = 1;
                     auto t = ParseCommand(commandLine);
                     cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
@@ -1677,18 +1677,18 @@ namespace CommandsImpl {
                     case 'a':
                     case 'i':
                     case 'c':
-                        index = 0;
+                        state = 0;
                         prevReadCharFn = g_state.readCharFn;
                         g_state.readCharFn = std::function<int()>(
-                                [&increment, &commandList, i, &index]() -> int {
-                                if(i + increment >= commandList.size()) return EOF;
-                                if(index >= commandList[i + increment].size()) {
-                                    index = 0;
+                                [&increment, &commandList, index, &state]() -> int {
+                                if(index + increment >= commandList.size()) return EOF;
+                                if(state >= commandList[index + increment].size()) {
+                                    state = 0;
                                     increment++;
                                     return '\n';
                                 }
-                                if(i + increment >= commandList.size()) return EOF;
-                                return commandList[i + increment][index++];
+                                if(index + increment >= commandList.size()) return EOF;
+                                return commandList[index + increment][state++];
                         });
                         break;
                     default: break;
