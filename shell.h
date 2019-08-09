@@ -19,7 +19,7 @@ class Process
 {
     Process();
 public:
-    void SpawnAndWait(
+    static void SpawnAndWait(
             std::string const& defaultFileName,
             std::string const& cmdLine,
             std::function<int()> readCharFn,

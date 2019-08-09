@@ -22,7 +22,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <sstream>
 #include <functional>
 #include <cstdarg>
-#include <atomic>
 #include <optional>
 #include <deque>
 
@@ -32,26 +31,17 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <windows.h>
 #include <io.h>
 
-#ifndef ISATTY
-# define ISATTY(X) _isatty(X)
-#endif
-
+#include "common.h"
 #include "cprintf.h"
 
+volatile std::atomic<bool> ctrlc = false;
+volatile std::atomic<bool> ctrlint = false;
 HANDLE TheConsoleStdin = NULL;
 UINT oldConsoleOutputCP = 0, oldConsoleInputCP = 0;
 void __cdecl RestoreConsoleCP()
 {
     if(oldConsoleOutputCP) SetConsoleOutputCP(oldConsoleOutputCP);
     if(oldConsoleInputCP) SetConsoleCP(oldConsoleInputCP);
-}
-
-volatile std::atomic<bool> ctrlc = false;
-volatile std::atomic<bool> ctrlint = false;
-inline bool CtrlC()
-{
-    return (ctrlc = ctrlc.load())
-        || (ctrlint = ctrlint.load());
 }
 
 struct GState {

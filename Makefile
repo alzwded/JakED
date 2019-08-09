@@ -1,7 +1,9 @@
 JAKED_TEST_SANITY_CHECK=0
 
-HEADERS = swapfile.h cprintf.h
-SOURCES = jaked.cpp  swapfile.cpp
+HEADERS = swapfile.h cprintf.h common.h shell.h
+COMMON_SOURCES =  swapfile.cpp shell.cpp
+SOURCES = jaked.cpp $(COMMON_SOURCES)
+TEST_SOURCES = jaked_test.cpp $(COMMON_SOURCES)
 
 CPRINTF_KEYS=\
 W \
@@ -19,6 +21,7 @@ swap \
 regex \
 MandT \
 g \
+shell \
 
 # leave above line blank
 
@@ -29,7 +32,7 @@ jaked_debug.exe: $(SOURCES)
 	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_DEBUG $** /Fe$@
 
 jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx 
-	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj jaked_test.cpp swapfile.cpp
+	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj $(TEST_SOURCES)
 
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
