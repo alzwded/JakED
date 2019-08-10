@@ -82,12 +82,15 @@ DWORD WINAPI WriteWorker(LPVOID lpParameter)
 #endif
         DWORD rv;
         //fprintf(stderr, "the horrors: reading\n");
+#pragma warning(push)
+#pragma warning(disable: 28193)
         auto hr = ReadFile(
                 h,
                 &buf,
                 sizeof(buf)/sizeof(buf[0]) - 1,
                 &rv,
                 NULL);
+#pragma warning(pop)
         buf[sizeof(buf) / sizeof(buf[0]) - 1] = 
 #if 0
             L'\0'
@@ -212,12 +215,12 @@ void Process::SpawnAndWait(
     cprintf<CPK::shell>("Creating pipes\n");
     hr = CreatePipe(&procIn, &myOut, &secAtts, 0);
     if(!hr) {
-        fprintf(stderr, "Failed to create pipe: %d\n", GetLastError());
+        fprintf(stderr, "Failed to create pipe: %lu\n", GetLastError());
         throw std::runtime_error("Failed to create pipe");
     }
     hr = CreatePipe(&myIn, &procOut, &secAtts, 0);
     if(!hr) {
-        fprintf(stderr, "Failed to create pipe: %d\n", GetLastError());
+        fprintf(stderr, "Failed to create pipe: %lu\n", GetLastError());
         throw std::runtime_error("Failed to create pipe");
     }
 
@@ -247,41 +250,19 @@ void Process::SpawnAndWait(
             // OK, pass the read end of the closed pipe
             cprintf<CPK::shell>("Stdin is not a tty\n");
         }
-        if(true || ISATTY(_fileno(stdout))) { // XXX this is a hard decision on what behaviour should be...
-            cprintf<CPK::shell>("Closing procOut and using STD_OUTPUT_HANDLE\n");
-            CloseHandle(procOut);
-            closeProcOut = false;
-            procOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        } else {
-#if 1
-            cprintf<CPK::shell>("Closing procOut and using STD_ERROR_HANDLE\n");
-            CloseHandle(procOut);
-            closeProcOut = false;
-            procOut = GetStdHandle(STD_ERROR_HANDLE);
-#else
-            cprintf<CPK::shell>("Stdout is not a tty\n");
-#endif
-        }
+        cprintf<CPK::shell>("Closing procOut and using STD_OUTPUT_HANDLE\n");
+        CloseHandle(procOut);
+        closeProcOut = false;
+        procOut = GetStdHandle(STD_OUTPUT_HANDLE);
         break;
     case 1: // we are piping to the process
         cprintf<CPK::shell>("w! Closing myIn\n");
         CloseHandle(myIn);
         myIn = NULL;
-        if(true || ISATTY(_fileno(stdout))) { // XXX this is a hard decision on what behaviour should be...
-            cprintf<CPK::shell>("Closing procOut and using STD_OUTPUT_HANDLE\n");
-            CloseHandle(procOut);
-            closeProcOut = false;
-            procOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        } else {
-#if 1
-            cprintf<CPK::shell>("Closing procOut and using STD_ERROR_HANDLE\n");
-            CloseHandle(procOut);
-            closeProcOut = false;
-            procOut = GetStdHandle(STD_ERROR_HANDLE);
-#else
-            cprintf<CPK::shell>("Stdout is not a tty\n");
-#endif
-        }
+        cprintf<CPK::shell>("Closing procOut and using STD_OUTPUT_HANDLE\n");
+        CloseHandle(procOut);
+        closeProcOut = false;
+        procOut = GetStdHandle(STD_OUTPUT_HANDLE);
         break;
     case 2: // we are piping from the process
         cprintf<CPK::shell>("r! Closing myOut\n");
@@ -310,7 +291,7 @@ void Process::SpawnAndWait(
                 sysdir,
                 sizeof(sysdir));
         if(!hr) {
-            fprintf(stderr, "Failed to get %%SystemRoot%%\n", GetLastError());
+            fprintf(stderr, "Failed to get %%SystemRoot%%: %lu\n", GetLastError());
             sysdir[0] = '\0';
         }
         sysdirmaybebackslash.assign(sysdir);
@@ -398,7 +379,7 @@ void Process::SpawnAndWait(
             &startupInfo, // startup info
             &procInfo); // output lpProcInfo
     if(!hr || procInfo.hProcess == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "Failed to spawn process: %d\n", GetLastError());
+        fprintf(stderr, "Failed to spawn process: %lu\n", GetLastError());
         throw std::runtime_error("Failed to spawn process");
     }
 
@@ -411,6 +392,10 @@ void Process::SpawnAndWait(
             &readThreadData,
             0, // flags
             NULL); // thread id
+    if(!hRead || hRead == INVALID_HANDLE_VALUE) {
+        cprintf<CPK::shell>("Failed to spawn read thread %lu\n", GetLastError());
+        // TODO TerminateProcess, close handles, etc...
+    }
     cprintf<CPK::shell>("Spawining writer thread\n");
     MethodAndHandle writeThreadData = { myIn, &writeStringFn };
     HANDLE hWrite = CreateThread(
@@ -420,6 +405,10 @@ void Process::SpawnAndWait(
             &writeThreadData,
             0,
             NULL);
+    if(!hWrite || hWrite == INVALID_HANDLE_VALUE) {
+        cprintf<CPK::shell>("Failed to spawn write thread %lu\n", GetLastError());
+        // TODO TerminateProcess, cancelio on read thread, close handles, etc...
+    }
 
 
     // !!! very important:
@@ -446,7 +435,7 @@ void Process::SpawnAndWait(
         if(waitHR == WAIT_OBJECT_0) break;
         if(waitHR == WAIT_TIMEOUT) fprintf(stderr, "WaitForSingleObject timed out (wasn't it waiting for INFINITE?)\n");
         if(waitHR == WAIT_FAILED) {
-            cprintf<CPK::shell>("WAIT_FAILED: %d\n", GetLastError());
+            cprintf<CPK::shell>("WAIT_FAILED: %lu\n", GetLastError());
             if(GetLastError() == ERROR_OPERATION_ABORTED) {
                 if(CtrlC()) break;
                 else {
@@ -460,14 +449,14 @@ void Process::SpawnAndWait(
     if(CtrlC()) {
         cprintf<CPK::shell>("Cancelling all I/O\n");
         // TODO TerminateProcess and ensure I have permissions to do that
-        CancelIoEx(myIn, NULL);
-        CancelIoEx(myOut, NULL);
+        if(myIn && myIn != INVALID_HANDLE_VALUE) CancelIoEx(myIn, NULL);
+        if(myOut && myOut != INVALID_HANDLE_VALUE) CancelIoEx(myOut, NULL);
     }
 
     cprintf<CPK::shell>("Waiting for workers\n");
     HANDLE workers[] = { hRead, hWrite };
     do {
-        auto hr = WaitForMultipleObjects(
+        hr = WaitForMultipleObjects(
                 2,
                 workers,
                 TRUE,
@@ -476,8 +465,8 @@ void Process::SpawnAndWait(
             cprintf<CPK::shell>("WaitForMultipleObjects: Got timeout or wait failed, checking CtrlC()\n");
             if(CtrlC()) {
                 cprintf<CPK::shell>("Calling CancelIoEx\n");
-                CancelIoEx(myIn, NULL);
-                CancelIoEx(myOut, NULL);
+                if(myIn && myIn != INVALID_HANDLE_VALUE) CancelIoEx(myIn, NULL);
+                if(myOut && myOut != INVALID_HANDLE_VALUE) CancelIoEx(myOut, NULL);
             }
         } else {
             break;
