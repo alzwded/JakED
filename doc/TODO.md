@@ -181,3 +181,14 @@ Internals, Externals and Other Tasks
 + [ ] don't crash if file can't be read
 + [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long
 + [ ] add a command line flag for recovery
+
+Summary
+=======
+
+Big topics:
+
++ [ ] Shell escapes
++ [ ] Command line arguments
++ [ ] Undo
+
+Other small topics remain, but `ed` is usable even if those topics are open.
