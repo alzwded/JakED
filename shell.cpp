@@ -115,8 +115,10 @@ DWORD WINAPI WriteWorker(LPVOID lpParameter)
             }
 #else
             for(size_t i = 0; i < rv; ++i) {
+                // TODO handle \r\n
+                if(buf[i] == '\r') continue;
                 if(buf[i] == '\n') {
-                    buffer << buf[i];
+                    //buffer << buf[i];
                     writeStringFn(buffer.str());
                     buffer.str("");
                     continue;
@@ -136,8 +138,10 @@ DWORD WINAPI WriteWorker(LPVOID lpParameter)
     //fprintf(stderr, "the horrors: exiting\n");
 
     if(!buffer.str().empty()) {
+#if 0
         if(buffer.str()[buffer.str().size() - 1] != '\n')
             buffer << '\n';
+#endif
         writeStringFn(buffer.str());
     }
 
@@ -284,7 +288,7 @@ void Process::SpawnAndWait(
 
     // spawn the process
     std::stringstream commandLine;
-    std::string sysdirmaybebackslash;
+    static std::string sysdirmaybebackslash;
     if(!*sysdir) {
         DWORD len = GetEnvironmentVariable(
                 "SystemRoot",

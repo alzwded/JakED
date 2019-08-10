@@ -25,7 +25,7 @@ struct Reader {
         }
         fprintf(stderr, "\n");
 #endif
-        fprintf(stdout, "test:\t%s", s.c_str());
+        fprintf(stdout, "test:\t%s\n", s.c_str());
     }
 };
 

@@ -83,7 +83,7 @@ Misc
 + [x] .,.#
 + [ ] ! (execute some command and output a '!')
 + [ ] !! (repeat last shell command)
-+ [ ] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
++ [x] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
 
 Commands
 --------
@@ -153,11 +153,11 @@ I/O
 
 *Shell versions*:
 
-+ [ ] r !sh
-+ [ ] f !sh
++ [x] r !sh
++ ~~f !sh~~ f is used in the shell command line, and it's not in the spec either
 + [ ] e !sh
 + [ ] w !sh
-+ [ ] wr !sh, rw !sh    (extension to filter text through external command)
++ [ ] N,M!sh, N,M!!   (extension to filter text through external command)
 
 Internals, Externals and Other Tasks
 ------------------------------------

@@ -33,6 +33,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include "common.h"
 #include "cprintf.h"
+#include "shell.h"
 
 volatile std::atomic<bool> ctrlc = false;
 volatile std::atomic<bool> ctrlint = false;
@@ -527,8 +528,72 @@ namespace CommandsImpl {
         if(tail.empty()) tail = g_state.filename;
         if(tail.empty()) throw JakEDException("No such file!");
         size_t bytes = 0;
+
+
+        // navigate to insertion point
+        int originalNlines = g_state.nlines;
+        auto after = g_state.swapfile.head();
+        while(nthLine-- > 0
+                && after->next())
+        {
+            after = after->next();
+            if(CtrlC()) {
+                cprintf<CPK::CTRLC>("r: ctrlc invoked while skipping\n");
+                cprintf<CPK::r>("r: ctrlc invoked while skipping\n");
+                return;
+            }
+        }
+        bool bomChecked = false;
+        //g_state.nlines = 0;
+        auto continueFrom = after->next();
+        cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (static_cast<std::string>(after->text()).c_str()) : "<EOF>", (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "<EOF>");
+
         if(tail[0] == '!') {
-            throw JakEDException("shell execution is not implemented");
+            // TODO refactor common code out into function which operates on lines
+            int linesInserted = 0;
+            auto sink = [&after, continueFrom, &bomChecked, &bytes, &linesInserted](std::string const& s) {
+                // note: this is called from a separate thread
+                if(CtrlC()) return;
+                bytes += s.size() + 1;
+                ++linesInserted;
+                cprintf<CPK::r>("Adding %s after %s and before %s\n",
+                        s.c_str(),
+                        (after) ? static_cast<std::string>(after->text()).c_str() : "EOF",
+                        (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "EOF");
+                auto inserted = g_state.swapfile.line(s);
+                inserted->link(continueFrom);
+                after->link(inserted);
+                after = inserted;
+                ++g_state.nlines;
+            };
+
+            std::exception_ptr ex;
+            try {
+                // blocking
+                Process::SpawnAndWait(
+                        g_state.filename,
+                        tail.substr(1), // TODO !!
+                        {},
+                        sink);
+            } catch(...) {
+                ex = std::current_exception();
+            }
+            g_state.writeStringFn("!\n");
+            cprintf<CPK::r>("read %d lines\n", linesInserted);
+            if(linesInserted) g_state.dirty = true;
+
+            std::stringstream undoBuffer;
+            undoBuffer << range.second << "," << (range.second + linesInserted) << "d";
+            auto undoHead = g_state.swapfile.line(undoBuffer.str());
+            g_state.swapfile.undo(undoHead);
+
+            std::stringstream bytesAsString;
+            bytesAsString << bytes << std::endl;
+            g_state.writeStringFn(bytesAsString.str());
+
+            if(ex) std::rethrow_exception(ex);
+
+            return;
         }
         FILE* f = fopen(tail.c_str(), "r");
         struct AtEnd {
@@ -537,24 +602,8 @@ namespace CommandsImpl {
             ~AtEnd() { fclose(f); }
         } atEnd(f);
         if(f) {
-            int originalNlines = g_state.nlines;
-            auto after = g_state.swapfile.head();
-            while(nthLine-- > 0
-                    && after->next())
-            {
-                after = after->next();
-                if(CtrlC()) {
-                    cprintf<CPK::CTRLC>("r: ctrlc invoked while skipping\n");
-                    cprintf<CPK::r>("r: ctrlc invoked while skipping\n");
-                    return;
-                }
-            }
             std::stringstream line;
             int c;
-            bool bomChecked = false;
-            //g_state.nlines = 0;
-            auto continueFrom = after->next();
-            cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (static_cast<std::string>(after->text()).c_str()) : "<EOF>", (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "<EOF>");
             while(!feof(f) && (c = fgetc(f)) != EOF) {
                 if(CtrlC()) {
                     cprintf<CPK::CTRLC>("r: ctrlc invoked while reading\n");
