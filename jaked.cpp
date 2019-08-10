@@ -2199,12 +2199,11 @@ void ErrorOccurred(std::exception& ex)
     g_state.error = true;
     g_state.diagnostic = ex.what();
     cprintf<CPK::error>("%s\n", ex.what());
+    g_state.writeStringFn("?\n"); // compliance, H mode still prints out the question mark, and then prints out the message
     if(g_state.Hmode) {
         std::stringstream ss;
         ss << g_state.diagnostic << std::endl;
         g_state.writeStringFn(ss.str());
-    } else {
-        g_state.writeStringFn("?\n");
     }
     if(!ISATTY(_fileno(stdin))) CommandsImpl::Q(Range(), "");
 } // ErrorOccurred
