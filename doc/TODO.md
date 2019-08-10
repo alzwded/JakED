@@ -81,8 +81,6 @@ Misc
 + [x] H
 + [x] h
 + [x] .,.#
-+ [ ] ! (execute some command and output a '!')
-+ [ ] !! (repeat last shell command)
 + [x] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
 
 Commands
@@ -161,6 +159,9 @@ I/O
   + [x] e! and E! set dirty flag
 + [ ] w !sh
 + [ ] N,M!sh, N,M!!   (extension to filter text through external command)
++ [ ] ! (execute some command and output a '!')
++ [ ] !! (repeat last shell command)
+  * [ ] refactor common code (processing !!, the sink and the emitter)
 
 Internals, Externals and Other Tasks
 ------------------------------------
