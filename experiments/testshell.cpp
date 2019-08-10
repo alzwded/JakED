@@ -134,6 +134,26 @@ int call(int argc, char** argv)
         }
         fprintf(stderr, "==========================\n");
         break;
+    case '4':
+        fprintf(stderr, "==========================\n");
+        fprintf(stderr, "testing conversion of $ to filename\n");
+        fprintf(stderr, "tty: test:\tLine 1\n"
+                        "     test:\tLine 2\n"
+                        "");
+        fprintf(stderr, "pipe:test:\tLine 1\n"
+                        "     test:\tLine 2\n"
+                        "");
+        fprintf(stderr, "--------------------------\n");
+        {
+            reader = Reader();
+            Process::SpawnAndWait(
+                    R"(..\test\twolines.txt)",
+                    "type $",
+                    writer,
+                    reader);
+        }
+        fprintf(stderr, "==========================\n");
+        break;
     default:
         fprintf(stderr, "not a valid test number\n");
         return 1;

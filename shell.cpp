@@ -15,12 +15,14 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include <exception>
 #include <sstream>
+#include <regex>
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 #define NOMINMAX
 #include <windows.h>
 #include <io.h>
+
 
 struct MethodAndHandle {
     HANDLE h;
@@ -142,7 +144,7 @@ DWORD WINAPI WriteWorker(LPVOID lpParameter)
 
 void Process::SpawnAndWait(
         std::string const& defaultFileName,
-        std::string const& inputCommandLine,
+        std::string const& inputCommandLine_,
         std::function<int()> readCharFn,
         std::function<void(std::string const&)> writeStringFn)
 {
@@ -319,8 +321,37 @@ void Process::SpawnAndWait(
 
     }
     cprintf<CPK::shell>("cmd.exe path is: %s\n", sysdirmaybebackslash.c_str());
-    // TODO inputCommandLine =~ s/(?!\\)$/defaultFileName/g
-    commandLine << sysdirmaybebackslash << " /s /c \"" << inputCommandLine << "\"";
+    // inject filename instead of $; \$ is a regular dollar sign
+    // This is a deviation from ed's spec, but % is used on windows
+    // for env vars, so I figured I can just swap them around for this
+    // purpose.
+    // Not using std::regex because it appears it doesn't know about
+    // lookbehinds, so... do it the classic way
+    auto inputCommandLine = inputCommandLine_;
+    commandLine << sysdirmaybebackslash << " /s /c \"";
+    if(!defaultFileName.empty()) {
+        while(!inputCommandLine.empty()) {
+            auto j = inputCommandLine.find('$');
+            if(j == std::string::npos) {
+                commandLine << inputCommandLine;
+                inputCommandLine = ""; // clobber
+                break;
+            }
+            if(j == 0 || (
+                        j != std::string::npos
+                        && inputCommandLine[j - 1] != '\\')
+            ) {
+                commandLine << inputCommandLine.substr(0, j) << defaultFileName;
+                inputCommandLine = inputCommandLine.substr(j + 1);
+            } else {
+                commandLine << inputCommandLine.substr(0, j + 1);
+                inputCommandLine = inputCommandLine.substr(j + 1);
+            }
+        }
+    } else {
+        commandLine << inputCommandLine;
+    }
+    commandLine << "\"";
     std::string multiByteString = commandLine.str();
     cprintf<CPK::shell>("Command line is %s\n", multiByteString.c_str());
     // TODO AtFunctionExit free
@@ -409,23 +440,49 @@ void Process::SpawnAndWait(
     cprintf<CPK::shell>("Resuming the thread of our process\n");
     // start the actual process
     ResumeThread(procInfo.hThread);
-    DWORD waitHR = WaitForSingleObject(procInfo.hProcess, INFINITE);
-    // TODO check waitHR
+    do {
+        SetLastError(0);
+        DWORD waitHR = WaitForSingleObject(procInfo.hProcess, INFINITE);
+        if(waitHR == WAIT_OBJECT_0) break;
+        if(waitHR == WAIT_TIMEOUT) fprintf(stderr, "WaitForSingleObject timed out (wasn't it waiting for INFINITE?)\n");
+        if(waitHR == WAIT_FAILED) {
+            cprintf<CPK::shell>("WAIT_FAILED: %d\n", GetLastError());
+            if(GetLastError() == ERROR_OPERATION_ABORTED) {
+                if(CtrlC()) break;
+                else {
+                    fprintf(stderr, "WaitForSingleObject: got EINT, but CtrlC() reported false... looping\n");
+                }
+            }
+        }
+    } while(1);
+    cprintf<CPK::shell>("Returned from process\n");
 
     if(CtrlC()) {
         cprintf<CPK::shell>("Cancelling all I/O\n");
-        // TODO send process a termination signal and replace INFINITE above
+        // TODO TerminateProcess and ensure I have permissions to do that
         CancelIoEx(myIn, NULL);
         CancelIoEx(myOut, NULL);
     }
 
     cprintf<CPK::shell>("Waiting for workers\n");
     HANDLE workers[] = { hRead, hWrite };
-    waitHR = WaitForMultipleObjects(
-            2,
-            workers,
-            TRUE,
-            INFINITE); // TODO wait for 5s and CancelIOEx, but be careful because if it's processing a large buffer (?!), the reader might still be working.
+    do {
+        auto hr = WaitForMultipleObjects(
+                2,
+                workers,
+                TRUE,
+                INFINITE); // TODO revisit this later...
+        if(hr == WAIT_TIMEOUT || hr == WAIT_FAILED) {
+            cprintf<CPK::shell>("WaitForMultipleObjects: Got timeout or wait failed, checking CtrlC()\n");
+            if(CtrlC()) {
+                cprintf<CPK::shell>("Calling CancelIoEx\n");
+                CancelIoEx(myIn, NULL);
+                CancelIoEx(myOut, NULL);
+            }
+        } else {
+            break;
+        }
+    } while(1);
 
     cprintf<CPK::shell>("Workers joined, closing handles\n");
 

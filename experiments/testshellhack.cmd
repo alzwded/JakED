@@ -1,5 +1,5 @@
 
-for /l %%i in (0, 1, 3) do (
+for /l %%i in (0, 1, 4) do (
 	echo.%%i
 	time /T | testshell %%i
     IF ERRORLEVEL 1 EXIT /B 1
