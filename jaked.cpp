@@ -686,14 +686,13 @@ namespace CommandsImpl {
         g_state.swapfile.head()->link();
         g_state.nlines = 0;
         r(Range::S(0), tail);
-        g_state.dirty = false;
+        g_state.dirty = (tail[0] == '!');
     } // E
 
     void e(Range range, std::string tail)
     {
         if(g_state.dirty) throw JakEDException("file has modifications");
-        E(range, tail);
-        g_state.dirty = true;
+        return E(range, tail);
     }
 
     void H(Range range, std:: string tail)

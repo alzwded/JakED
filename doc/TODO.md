@@ -158,6 +158,7 @@ I/O
 + [x] r !sh
 + ~~f !sh~~ f is used in the shell command line, and it's not in the spec either
 + [x] e !sh
+  + [x] e! and E! set dirty flag
 + [ ] w !sh
 + [ ] N,M!sh, N,M!!   (extension to filter text through external command)
 
