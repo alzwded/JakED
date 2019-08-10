@@ -1,0 +1,6 @@
+f test.tmp
+r !echo.
+e !echo.
+E !echo hi
+f
+Q

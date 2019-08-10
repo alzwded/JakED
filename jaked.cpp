@@ -580,7 +580,10 @@ namespace CommandsImpl {
             }
             g_state.writeStringFn("!\n");
             cprintf<CPK::r>("read %d lines\n", linesInserted);
-            if(linesInserted) g_state.dirty = true;
+            if(linesInserted) {
+                cprintf<CPK::r>("set dirty flag\n");
+                g_state.dirty = true;
+            }
 
             std::stringstream undoBuffer;
             undoBuffer << range.second << "," << (range.second + linesInserted) << "d";
@@ -671,7 +674,7 @@ namespace CommandsImpl {
     {
         tail = getFileName(tail);
         if(tail[0] == '!') {
-            throw JakEDException("shell execution is not implemented");
+            cprintf<CPK::r>("E: forwarding shell command to r. Not setting filename\n");
         } else {
             g_state.filename = tail;
         }
@@ -689,7 +692,8 @@ namespace CommandsImpl {
     void e(Range range, std::string tail)
     {
         if(g_state.dirty) throw JakEDException("file has modifications");
-        return E(range, tail);
+        E(range, tail);
+        g_state.dirty = true;
     }
 
     void H(Range range, std:: string tail)

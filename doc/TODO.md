@@ -136,6 +136,8 @@ Swapfile
 I/O
 ---
 
++ [ ] fix `\b`'s resulting in interesting text when passed as cmdLine...
+
 + [x] r [F]
   * [ ] be able to read test\OctrlChars.txt; right now it fails at ^Z (windows EOT? can that even be parsed?)
     this might be a non-issue, although it would be nice to be able to read everything. Need to check if real ed can read ^D or something like that.
@@ -155,7 +157,7 @@ I/O
 
 + [x] r !sh
 + ~~f !sh~~ f is used in the shell command line, and it's not in the spec either
-+ [ ] e !sh
++ [x] e !sh
 + [ ] w !sh
 + [ ] N,M!sh, N,M!!   (extension to filter text through external command)
 
