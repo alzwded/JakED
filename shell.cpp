@@ -342,14 +342,14 @@ void Process::SpawnAndWait(
     startupInfo.cb = sizeof(startupInfo);
     startupInfo.dwFlags = 0
         | STARTF_USESTDHANDLES // implies bInheritHandles in CreateProcessW
-        //| CREATE_NEW_CONSOLE
-        | CREATE_NO_WINDOW // I don't want this to be an ncurses interactive thing, but it can be a windows application
         ;
     startupInfo.hStdInput = procIn;
     startupInfo.hStdOutput = procOut;
     startupInfo.hStdError = procErr;
     DWORD dwFlags = 0
         | CREATE_SUSPENDED // I'll tell it when to run with ResumeThread(hProcess)
+        //| CREATE_NEW_CONSOLE // maybe doesn't work for me
+        //| CREATE_NO_WINDOW // definitely doesn't work for me
         ;
     PROCESS_INFORMATION procInfo;
     memset(&procInfo, 0, sizeof(procInfo));
