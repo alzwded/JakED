@@ -81,12 +81,25 @@ DWORD WINAPI WriteWorker(LPVOID lpParameter)
         CHAR buf[256];
 #endif
         DWORD rv;
+#if 0
+        DWORD available;
+        PeekNamedPipe(
+                h,
+                NULL,
+                0,
+                NULL,
+                &available,
+                NULL);
+        if(available == 0) available = sizeof(buf)/sizeof(buf[0]) - 1;
+        fprintf(stderr, "%d\n", available);
+#endif
         //fprintf(stderr, "the horrors: reading\n");
 #pragma warning(push)
 #pragma warning(disable: 28193)
         auto hr = ReadFile(
                 h,
                 &buf,
+                //std::min(sizeof(buf)/sizeof(buf[0]) - 1, (size_t)available),
                 sizeof(buf)/sizeof(buf[0]) - 1,
                 &rv,
                 NULL);
@@ -340,19 +353,28 @@ void Process::SpawnAndWait(
     std::string multiByteString = commandLine.str();
     cprintf<CPK::shell>("Command line is %s\n", multiByteString.c_str());
     // TODO AtFunctionExit free
-    wchar_t* wideString = (wchar_t*)calloc(multiByteString.size(), sizeof(wchar_t));
-    int cchWideChar = (int)multiByteString.size();
-    int len = MultiByteToWideChar(CP_UTF8,
+    int len = MultiByteToWideChar(
+            CP_UTF8,
             0 /*because CP_UTF8*/,
             multiByteString.data(),
-            (int)multiByteString.size(),
+            -1, /* null terminated input; this puts null char at end of converted string as well */
+            NULL, 
+            0);
+    wchar_t* wideString = (wchar_t*)calloc(len+1, sizeof(wchar_t));
+    len = MultiByteToWideChar(
+            CP_UTF8,
+            0 /*because CP_UTF8*/,
+            multiByteString.data(),
+            -1, /* null terminated input; this puts null char at end of converted string as well */
             wideString, 
-            cchWideChar);
+            len);
+    wideString[len] = L'\0';
     if(len == 0) {
         std::stringstream ss;
         ss << "Failed to convert " << multiByteString << " to unicode: " << GetLastError() << "\n";
         throw std::runtime_error(ss.str());
     }
+    cprintf<CPK::shell>("Unicode command line is [%ws] (check for runoff strings)\n", wideString);
     STARTUPINFOW startupInfo;
     memset(&startupInfo, 0, sizeof(startupInfo));
     startupInfo.cb = sizeof(startupInfo);

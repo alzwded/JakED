@@ -212,8 +212,8 @@ struct ConsoleReader {
             // if they are interrupted (as defined for ^C and ^BRK)
             cprintf<CPK::CTRLC2>("reading\n");
             // maybe read something to the extent of a full line? ReadConsoleW returns after \n
-            WCHAR buf[256];
-            CHAR buf2[256 * 5];
+            WCHAR buf[4096];
+            CHAR buf2[4096 * 5];
 #ifdef CTRLV
             CONSOLE_READCONSOLE_CONTROL lpCRC;
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));

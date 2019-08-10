@@ -136,7 +136,7 @@ Swapfile
 I/O
 ---
 
-+ [ ] fix `\b`'s resulting in interesting text when passed as cmdLine...
++ [x] fix the gremlines that happen when I invoke echo and read the output, it really seems like my end is reading "correctly", but I still haven't figured out where the garbage buffer overflow bleed comes from... (mb2wcs was not null terminated)
 
 + [x] r [F]
   * [ ] be able to read test\OctrlChars.txt; right now it fails at ^Z (windows EOT? can that even be parsed?)
