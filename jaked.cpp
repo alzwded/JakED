@@ -212,8 +212,8 @@ struct ConsoleReader {
             // if they are interrupted (as defined for ^C and ^BRK)
             cprintf<CPK::CTRLC2>("reading\n");
             // maybe read something to the extent of a full line? ReadConsoleW returns after \n
-            WCHAR buf[4096];
-            CHAR buf2[4096 * 5];
+            WCHAR buf[1024]; // TODO move these buffers to GState
+            CHAR buf2[1024 * 5]; // TODO move these buffers to GState
 #ifdef CTRLV
             CONSOLE_READCONSOLE_CONTROL lpCRC;
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
@@ -586,13 +586,14 @@ namespace CommandsImpl {
             }
 
             std::stringstream undoBuffer;
-            undoBuffer << range.second << "," << (range.second + linesInserted) << "d";
+            undoBuffer << range.second + 1 << "," << (range.second + linesInserted) << "d";
             auto undoHead = g_state.swapfile.line(undoBuffer.str());
             g_state.swapfile.undo(undoHead);
 
             std::stringstream bytesAsString;
             bytesAsString << bytes << std::endl;
             g_state.writeStringFn(bytesAsString.str());
+            g_state.line = range.second + linesInserted;
 
             if(ex) std::rethrow_exception(ex);
 
