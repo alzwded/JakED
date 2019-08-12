@@ -159,8 +159,8 @@ I/O
 + [x] e !sh
   + [x] e! and E! set dirty flag
 + [x] w !sh
-+ [ ] N,M!sh, N,M!!   (extension to filter text through external command)
-+ [ ] ! (execute some command and output a '!')
++ [x] N,M!sh, N,M!!   (extension to filter text through external command)
++ [x] ! (execute some command and output a '!')
 + [ ] !! (repeat last shell command)
   * [ ] refactor common code (processing !!, the sink and the emitter)
 
