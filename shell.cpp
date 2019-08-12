@@ -168,6 +168,17 @@ void Process::SpawnAndWait(
         std::function<int()> readCharFn,
         std::function<void(std::string const&)> writeStringFn)
 {
+    // Before we get started, flush stdout so that we serialize output
+    // ...and by that, I mean that force our output to be put to STDOUT
+    // before our child process'. Once the child process exits, we assume
+    // its buffers get flushed because they get closed, and ours was empty
+    // anyway so we'll get to get everything in order I hope
+    fflush(stdout); // flush CRT buffer
+    auto hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if(hStdOut && hStdOut != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(hStdOut); // flush the underlying buffer or whatever
+    }
+
     // Setup logic.
     // - if ISATTY
     //     - if readCharFn, create pipe proc_stdin

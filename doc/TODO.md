@@ -29,6 +29,7 @@ Regex
   * [x] mutiline "command-list"
   * [x] a, i and c support
   * [x] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
+  * [ ] std::regex is apparently superslow... try passing the compile flag, or find a snappier regex library (like the one on FreeBSD, that one's BSD licensed)
 + [x] G//
 + [x] v//
 + [x] V//
@@ -157,7 +158,7 @@ I/O
 + ~~f !sh~~ f is used in the shell command line, and it's not in the spec either
 + [x] e !sh
   + [x] e! and E! set dirty flag
-+ [ ] w !sh
++ [x] w !sh
 + [ ] N,M!sh, N,M!!   (extension to filter text through external command)
 + [ ] ! (execute some command and output a '!')
 + [ ] !! (repeat last shell command)

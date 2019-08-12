@@ -63,6 +63,8 @@ struct GState {
     std::regex regexp;
     std::string fmt;
     std::list<LinePtr> gLines;
+    WCHAR conInBuf[4096];
+    CHAR conInBufUTF8[4096 * 5];
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -212,8 +214,6 @@ struct ConsoleReader {
             // if they are interrupted (as defined for ^C and ^BRK)
             cprintf<CPK::CTRLC2>("reading\n");
             // maybe read something to the extent of a full line? ReadConsoleW returns after \n
-            WCHAR buf[1024]; // TODO move these buffers to GState
-            CHAR buf2[1024 * 5]; // TODO move these buffers to GState
 #ifdef CTRLV
             CONSOLE_READCONSOLE_CONTROL lpCRC;
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
@@ -225,8 +225,8 @@ struct ConsoleReader {
 
             auto success = ReadConsoleW(
                     TheConsoleStdin,
-                    &buf,
-                    sizeof(buf)/sizeof(buf[0]) - 1,
+                    &g_state.conInBuf,
+                    sizeof(g_state.conInBuf)/sizeof(g_state.conInBuf[0]) - 1,
                     &rv,
 #ifdef CTRLV
                     &lpCRC
@@ -234,7 +234,7 @@ struct ConsoleReader {
                     NULL
 #endif
                     );
-            buf[sizeof(buf) / sizeof(buf[0]) - 1] = L'\0';
+            g_state.conInBuf[sizeof(g_state.conInBuf) / sizeof(g_state.conInBuf[0]) - 1] = L'\0';
             if(GetLastError() != 0) {
                 cprintf<CPK::CTRLC>("ERROR_OPERATION_ABORTED is %lu\n", ERROR_OPERATION_ABORTED);
                 cprintf<CPK::CTRLC>("ERROR_INVALID_ARGUMENT is 87\n");
@@ -244,7 +244,7 @@ struct ConsoleReader {
 
                 fprintf(stderr, "Read %lu chars: ", rv);
                 for(size_t i = 0; i < rv; ++i)
-                    fprintf(stderr, "\\x%04X", buf[i]);
+                    fprintf(stderr, "\\x%04X", g_state.conInBuf[i]);
                 fprintf(stderr, "\n");
             }
 #ifdef CTRLV
@@ -291,12 +291,12 @@ struct ConsoleReader {
 
             if(GetLastError() == 0 && rv > 0) {
                 // FIXME NULL obviously terminates the string somewhere
-                auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, sizeof(buf2) - 1, NULL, NULL);
-                buf2[cchbuf] = '\0';
+                auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, g_state.conInBuf, rv, g_state.conInBufUTF8, sizeof(g_state.conInBufUTF8) - 1, NULL, NULL);
+                g_state.conInBufUTF8[cchbuf] = '\0';
                 for(size_t i = 0; i < cchbuf; ++i) {
-                    buffer.push_back(buf2[i]);
+                    buffer.push_back(g_state.conInBufUTF8[i]);
                 }
-                cprintf<CPK::CTRLC>("As utf8: %s\n", buf2);
+                cprintf<CPK::CTRLC>("As utf8: %s\n", g_state.conInBufUTF8);
             }
 
             // In the event that ReadConsoleA fails (I never saw it fail yet)
@@ -869,12 +869,6 @@ namespace CommandsImpl {
         if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw JakEDException("Invalid range");
         fname = getFileName(fname);
         FILE* f;
-        if(fname[0] == '!') throw new std::runtime_error("Writing to pipe not implemented");
-        else {
-            f = fopen(fname.c_str(), mode);
-            if(!f) throw JakEDException("Cannot open file for writing");
-            if(g_state.filename.empty()) g_state.filename = fname;
-        }
 
         size_t nBytes = 0;
 
@@ -883,17 +877,64 @@ namespace CommandsImpl {
         while(first-- > 0) {
             cprintf<CPK::W>("skipping %s\n", (i1) ? static_cast<std::string>(i1->text()).c_str() : "<EOF>");
             i1 = i1->next();
+            if(CtrlC()) throw JakEDException("Interrupted");
         }
         if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
+
+        if(fname[0] == '!') {
+            int i = 0;
+            auto emitter = [&i1, &second, &i, &nBytes]() -> int {
+                do {
+                    if(second == 0) {
+                        return EOF;
+                    }
+                    if(i > i1->length()) { // +1 intentional, see below
+                        second--;
+                        i = 0;
+                        i1 = i1->next();
+                        continue;
+                    }
+                    ++nBytes;
+                    if(i == i1->length()) {
+                        ++i;
+                        return '\n'; // TODO \r\n?
+                    }
+                    if(i < i1->length()) {
+                        return (char)i1->text().data()[i++];
+                    }
+                } while(1);
+            };
+            std::exception_ptr ex;
+            try {
+                Process::SpawnAndWait(
+                        g_state.filename,
+                        fname.substr(1),
+                        emitter,
+                        {});
+            } catch(...) {
+                ex = std::current_exception();
+            }
+            g_state.writeStringFn("!\n");
+            std::stringstream ss;
+            ss << nBytes << std::endl;
+            g_state.writeStringFn(ss.str());
+            return;
+        }
+
+        f = fopen(fname.c_str(), mode);
+        if(!f) throw JakEDException("Cannot open file for writing");
+        if(g_state.filename.empty()) g_state.filename = fname;
+
         while(second-- > 0 && i1) {
             if(i1) cprintf<CPK::W>("Writing %s\n", static_cast<std::string>(i1->text()).c_str());
             nBytes += i1->length() + strlen("\n");
             fprintf(f, "%s\n", static_cast<std::string>(i1->text()).c_str());
             i1 = i1->next();
+            if(CtrlC()) break;
         }
         fclose(f);
         //g_state.swapfile.gc();
-        g_state.dirty = false;
+        g_state.dirty = CtrlC(); //false;
         std::stringstream ss;
         ss << nBytes << std::endl;
         g_state.writeStringFn(ss.str());
