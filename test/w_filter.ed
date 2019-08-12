@@ -1,0 +1,14 @@
+H
+%!cscript /nologo test\cat.vbs
+.pn
+%!find "5"
+w test.tmp
+.pn
+a
+=
+.
+.pn
+.!jaked_debug.exe test.tmp
+;pn
+-d
+w

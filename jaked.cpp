@@ -848,7 +848,7 @@ namespace CommandsImpl {
             g_state.writeStringFn(ss.str());
             return;
         }
-        if(tail[0] == '!') throw JakEDException("Writing to a shell command's STDIN is not implemented");
+        if(tail[0] == '!') throw JakEDException("Invalid filename");
         size_t i = tail.size();
         while(tail[i - 1] == ' ') --i;
         if(i < tail.size()) tail = tail.substr(0, i);
@@ -873,7 +873,7 @@ namespace CommandsImpl {
         size_t nBytes = 0;
 
         auto i1 = g_state.swapfile.head();
-        auto first = r.first, second = r.second;
+        auto first = r.first, second = r.second - r.first + 1;
         while(first-- > 0) {
             cprintf<CPK::W>("skipping %s\n", (i1) ? static_cast<std::string>(i1->text()).c_str() : "<EOF>");
             i1 = i1->next();
@@ -1804,6 +1804,109 @@ namespace CommandsImpl {
         if(exitWithInvalidTail) throw JakEDException("The g, G, v and V commands may not appear in the command-list of a g, G, v or V command");
     } // g
 
+    void Shell(Range r, std::string tail)
+    {
+        if(r.second != 0) throw JakEDException("Internal error: unexpected valid range");
+        tail = tail.substr(SkipWS(tail, 0));
+        Process::SpawnAndWait(
+                g_state.filename,
+                tail,
+                {},
+                {});
+    }
+
+    void Filter(Range r, std::string tail)
+    {
+        if(r.second == 0) throw JakEDException("Internal error: unexpected valid range");
+        tail = tail.substr(SkipWS(tail, 0));
+
+        // TODO undo, preserve dot, nlines, structure, etc
+
+        size_t nBytes = 0;
+
+        auto after = g_state.swapfile.head();
+        auto first = r.first, second = r.second - r.first + 1;
+        while(first-- > 1) {
+            cprintf<CPK::W>("skipping %s\n", (after) ? static_cast<std::string>(after->text()).c_str() : "<EOF>");
+            after = after->next();
+            if(CtrlC()) throw JakEDException("Interrupted");
+        }
+        auto i1 = after->next();
+        auto i2 = after;
+        for(int sz = second; sz > 0 && i2; --sz) {
+            i2 = i2->next();
+        }
+        auto continueFrom = i2->next();
+        if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
+
+        int i = 0;
+        auto emitter = [&second, &i1, &nBytes, &i]() -> int {
+            do {
+                if(second == 0) {
+                    return EOF;
+                }
+                if(i > i1->length()) { // +1 intentional, see below
+                    second--;
+                    i = 0;
+                    i1 = i1->next();
+                    continue;
+                }
+                ++nBytes;
+                if(i == i1->length()) {
+                    ++i;
+                    return '\n'; // TODO \r\n?
+                }
+                if(i < i1->length()) {
+                    return (char)i1->text().data()[i++];
+                }
+            } while(1);
+        };
+
+        size_t bytes = 0;
+        size_t linesInserted = 0;
+        auto sink = [&bytes, &linesInserted, &after, continueFrom](std::string const& s) {
+            // note: this is called from a separate thread
+            if(CtrlC()) return;
+            bytes += s.size() + 1;
+            ++linesInserted;
+            cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %d\n", linesInserted, bytes, -1);
+            cprintf<CPK::r>("Adding %s after %s and before %s\n",
+                    s.c_str(),
+                    (after) ? static_cast<std::string>(after->text()).c_str() : "EOF",
+                    (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "EOF");
+            auto inserted = g_state.swapfile.line(s);
+            inserted->link(continueFrom);
+            after->link(inserted);
+            after = inserted;
+            ++g_state.nlines;
+        };
+
+        // unlink lines we're filtering
+        after->link(); // before r.first
+        i2->link(); // before continueFrom
+        g_state.nlines -= second; // FIXME we're not actually testing what we've unlinked
+
+        // TODO try catch, undo, don't modify the file if nothing happened
+        g_state.dirty = true;
+        Process::SpawnAndWait(
+                g_state.filename,
+                tail,
+                emitter,
+                sink);
+        if(linesInserted) g_state.line = r.first + linesInserted - 1;
+        g_state.writeStringFn("!"); // TODO test this gets written out
+
+        cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %zd\n", linesInserted, bytes, nBytes);
+    }
+
+    void BANG(Range r, std::string tail)
+    {
+        cprintf<CPK::shell>("Range is [%d,%d]\n", r.first, r.second);
+        cprintf<CPK::shell>("Tail is %s\n", tail.c_str());
+        if(r.second == 0) return Shell(r, tail);
+        else return Filter(r, tail);
+    }
+
 } // namespace CommandsImpl
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -1839,6 +1942,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'v', &CommandsImpl::gImpl<CommandsImpl::GFlags::Reverse> },
     { 'G', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive> },
     { 'V', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive|CommandsImpl::GFlags::Reverse> },
+    { '!', &CommandsImpl::BANG },
 }; // Commands
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
@@ -2268,6 +2372,9 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             std::tie(r, i) = ParseRange(s, i);
+            break;
+        case '!':
+            r = Range::S(0); // rangeless means simple shell escape
             break;
     } // switch range first char
     switch(s[i]) {

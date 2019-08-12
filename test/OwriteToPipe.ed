@@ -1,3 +1,3 @@
-1,2w !find "Some"
+2,3w !find "Some"
 1,$w !find "Cabbage"
 Q
