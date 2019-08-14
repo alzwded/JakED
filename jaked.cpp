@@ -2583,6 +2583,9 @@ int main(int argc, char* argv[])
         if(file.empty()) exit_usage("No such file!", argv[0]);
         Commands.at('r')(Range::ZERO(), file);
         g_state.dirty = false;
+        if(file[SkipWS(file, 0)] != '!') {
+            g_state.filename = file;
+        }
     }
 
     Loop();

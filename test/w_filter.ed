@@ -3,6 +3,7 @@ H
 .pn
 %!find "5"
 w test.tmp
+f test.tmp
 .pn
 a
 =
