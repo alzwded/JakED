@@ -161,7 +161,7 @@ I/O
 + [x] w !sh
 + [x] N,M!sh, N,M!!   (extension to filter text through external command)
 + [x] ! (execute some command and output a '!')
-+ [ ] !! (repeat last shell command)
++ [x] !! (repeat last shell command)
   * [ ] refactor common code (processing !!, the sink and the emitter)
 
 Internals, Externals and Other Tasks

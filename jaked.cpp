@@ -65,6 +65,7 @@ struct GState {
     std::list<LinePtr> gLines;
     WCHAR conInBuf[4096];
     CHAR conInBufUTF8[4096 * 5];
+    std::string lastBang;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -83,6 +84,7 @@ struct GState {
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
+        , decltype(lastBang) _lastBang = {}
     )
         : filename(_filename)
         , line(_line)
@@ -101,6 +103,7 @@ struct GState {
         , regexp(_regexp)
         , fmt(_fmt)
         , gLines(_gLines)
+        , lastBang(_lastBang)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -120,6 +123,7 @@ struct GState {
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
+        , decltype(lastBang) _lastBang = {}
     ) {
         filename = _filename;
         line = _line;
@@ -138,6 +142,7 @@ struct GState {
         regexp = _regexp;
         fmt = _fmt;
         gLines = _gLines;
+        lastBang = _lastBang;
     } // GState::operator()
 } g_state;
 
@@ -520,6 +525,13 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s);
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream);
 
 namespace CommandsImpl {
+    std::string getShellCommand(std::string const& tail)
+    {
+        // don't skip whitespace
+        if(tail[0] == '!') return g_state.lastBang;
+        else return tail;
+    }
+
     void r(Range range, std::string tail)
     {
         cprintf<CPK::r>("r: n before = %zd\n", g_state.nlines);
@@ -570,9 +582,10 @@ namespace CommandsImpl {
             std::exception_ptr ex;
             try {
                 // blocking
+                g_state.lastBang = getShellCommand(tail.substr(1));
                 Process::SpawnAndWait(
                         g_state.filename,
-                        tail.substr(1), // TODO !!
+                        g_state.lastBang,
                         {},
                         sink);
             } catch(...) {
@@ -906,9 +919,10 @@ namespace CommandsImpl {
             };
             std::exception_ptr ex;
             try {
+                g_state.lastBang = getShellCommand(fname.substr(1));
                 Process::SpawnAndWait(
                         g_state.filename,
-                        fname.substr(1),
+                        g_state.lastBang,
                         emitter,
                         {});
             } catch(...) {
@@ -1808,11 +1822,19 @@ namespace CommandsImpl {
     {
         if(r.second != 0) throw JakEDException("Internal error: unexpected valid range");
         tail = tail.substr(SkipWS(tail, 0));
-        Process::SpawnAndWait(
-                g_state.filename,
-                tail,
-                {},
-                {});
+        g_state.lastBang = getShellCommand(tail);
+        std::exception_ptr ex;
+        try {
+            Process::SpawnAndWait(
+                    g_state.filename,
+                    g_state.lastBang,
+                    {},
+                    {});
+        } catch(...) {
+            ex = std::current_exception();
+        }
+        g_state.writeStringFn("!\n");
+        if(ex) std::rethrow_exception(ex);
     }
 
     void Filter(Range r, std::string tail)
@@ -1886,17 +1908,26 @@ namespace CommandsImpl {
         i2->link(); // before continueFrom
         g_state.nlines -= second; // FIXME we're not actually testing what we've unlinked
 
-        // TODO try catch, undo, don't modify the file if nothing happened
+        // TODO undo, don't modify the file if nothing happened
         g_state.dirty = true;
-        Process::SpawnAndWait(
-                g_state.filename,
-                tail,
-                emitter,
-                sink);
+        std::exception_ptr ex;
+        try {
+            g_state.lastBang = getShellCommand(tail);
+            Process::SpawnAndWait(
+                    g_state.filename,
+                    g_state.lastBang,
+                    emitter,
+                    sink);
+        } catch(...) {
+            ex = std::current_exception();
+        }
+
         if(linesInserted) g_state.line = r.first + linesInserted - 1;
-        g_state.writeStringFn("!"); // TODO test this gets written out
+        g_state.writeStringFn("!\n");
 
         cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %zd\n", linesInserted, bytes, nBytes);
+
+        if(ex) std::rethrow_exception(ex);
     }
 
     void BANG(Range r, std::string tail)

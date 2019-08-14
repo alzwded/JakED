@@ -1,0 +1,5 @@
+E !echo hi
+E !!
+%!cscript /nologo test\cat.vbs
+%!!
+w test.tmp
