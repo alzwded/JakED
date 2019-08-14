@@ -10,6 +10,7 @@ See [TODO](doc/TODO.md) for current status.
 |-------------------|---------------------------------------------------|
 | `jaked.cpp`       | Main code (parsers, commands, state, UI). Yeah, it should be refactored |
 | `swapfile.{h,cpp}` | [Swapfile](doc/UndoAndSwapFile.md) implementation |
+| `shell.{h,cpp}`   | [Shell escape](doc/Shell.md) implementation |
 | `jaked_test.cpp`  | Internal test bed. This wraps `jaked.cpp` and the test suites, which are in include files to keep them slightly organized `test/*.ixx` |
 | `cprintf.h`       | Header containing `cprintf`, which is a conditionally compiled `printf` based on tokens. This file is generated. |
 | `cprintf_generate.c` | Generates `cprintf.h` based on tokens passed to the command line. Uses `cprintf_template.h` as a template. |
