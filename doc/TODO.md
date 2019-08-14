@@ -29,6 +29,7 @@ Regex
   * [x] mutiline "command-list"
   * [x] a, i and c support
   * [x] g/old/s//new/ applies s/old/new/ on all matching lines with no error reported
+  * [ ] std::regex is apparently superslow... try passing the compile flag, or find a snappier regex library (like the one on FreeBSD, that one's BSD licensed)
 + [x] G//
 + [x] v//
 + [x] V//
@@ -81,9 +82,7 @@ Misc
 + [x] H
 + [x] h
 + [x] .,.#
-+ [ ] ! (execute some command and output a '!')
-+ [ ] !! (repeat last shell command)
-+ [ ] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
++ [x] ~~% means~~ $ means default filename in shell commands (since the chars for env vars are swapped, might as well swap them back to avoid too much aprsing; $ doesn't mean _too much_ on windows; I'll maybe add an escape char in the future to support reading silly device names or alternate data streams)
 
 Commands
 --------
@@ -136,6 +135,8 @@ Swapfile
 I/O
 ---
 
++ [x] fix the gremlines that happen when I invoke echo and read the output, it really seems like my end is reading "correctly", but I still haven't figured out where the garbage buffer overflow bleed comes from... (mb2wcs was not null terminated)
+
 + [x] r [F]
   * [ ] be able to read test\OctrlChars.txt; right now it fails at ^Z (windows EOT? can that even be parsed?)
     this might be a non-issue, although it would be nice to be able to read everything. Need to check if real ed can read ^D or something like that.
@@ -153,11 +154,15 @@ I/O
 
 *Shell versions*:
 
-+ [ ] r !sh
-+ [ ] f !sh
-+ [ ] e !sh
-+ [ ] w !sh
-+ [ ] wr !sh, rw !sh    (extension to filter text through external command)
++ [x] r !sh
++ ~~f !sh~~ f is used in the shell command line, and it's not in the spec either
++ [x] e !sh
+  + [x] e! and E! set dirty flag
++ [x] w !sh
++ [x] N,M!sh, N,M!!   (extension to filter text through external command)
++ [x] ! (execute some command and output a '!')
++ [x] !! (repeat last shell command)
+  * [ ] refactor common code (processing !!, the sink and the emitter)
 
 Internals, Externals and Other Tasks
 ------------------------------------
@@ -177,3 +182,14 @@ Internals, Externals and Other Tasks
 + [ ] don't crash if file can't be read
 + [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long
 + [ ] add a command line flag for recovery
+
+Summary
+=======
+
+Big topics:
+
++ [ ] Shell escapes
++ [ ] Command line arguments
++ [ ] Undo
+
+Other small topics remain, but `ed` is usable even if those topics are open.

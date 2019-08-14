@@ -565,7 +565,8 @@ H
                     case 1: break; // byte count
                     case 2: ASSERT(s == "?\n"); break; // ?
                     case 3: ASSERT(s.size() && s != "?\n"); *line3 = s; break;
-                    case 4: ASSERT(s != "?\n"); ASSERT(s == *line3); break; // w/e error code there was
+                    case 4: ASSERT(s == "?\n"); break; // ?
+                    case 5: ASSERT(s != "?\n"); ASSERT(s == *line3); break; // w/e error code there was
                     default:
                         fprintf(stderr, "Unexpected string: %s", s.c_str());
                         fprintf(stderr, "Read %d already\n", *numLinesRead);
@@ -582,7 +583,7 @@ H
                     Loop();
                 } catch(application_exit& ex) {
                 }
-                ASSERT( (*numLinesRead) == 4);
+                ASSERT( (*numLinesRead) == 5);
             } TEST_RUN_END();
         } END_TEST();
 

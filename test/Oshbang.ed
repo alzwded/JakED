@@ -1,0 +1,8 @@
+P
+w!cscript /nologo test\cat.vbs
+w!!
+%!!
+%p
+!echo hi
+!!
+Q

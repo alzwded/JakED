@@ -1,0 +1,3 @@
+$r!type test\twolines.txt
+w test.tmp
+Q

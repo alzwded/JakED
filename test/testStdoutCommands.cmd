@@ -11,7 +11,8 @@
 :COMPARISON
     @SET ERRLVL=0
     TYPE %1 | %jaked% %~dpn1.txt > test.tmp
-    @IF ERRORLEVEL 1 SET ERRLVL=%ERRORLEVEL%
+    @REM don't set errorlevel because then I can't test failing scripts...
+    @REM @IF ERRORLEVEL 1 SET ERRLVL=%ERRORLEVEL%
     @COMP test.tmp %~dpn1.ref /A /M
     @IF ERRORLEVEL 1 (
         @ECHO %1

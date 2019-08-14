@@ -22,7 +22,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <sstream>
 #include <functional>
 #include <cstdarg>
-#include <atomic>
 #include <optional>
 #include <deque>
 
@@ -32,26 +31,18 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <windows.h>
 #include <io.h>
 
-#ifndef ISATTY
-# define ISATTY(X) _isatty(X)
-#endif
-
+#include "common.h"
 #include "cprintf.h"
+#include "shell.h"
 
+volatile std::atomic<bool> ctrlc = false;
+volatile std::atomic<bool> ctrlint = false;
 HANDLE TheConsoleStdin = NULL;
 UINT oldConsoleOutputCP = 0, oldConsoleInputCP = 0;
 void __cdecl RestoreConsoleCP()
 {
     if(oldConsoleOutputCP) SetConsoleOutputCP(oldConsoleOutputCP);
     if(oldConsoleInputCP) SetConsoleCP(oldConsoleInputCP);
-}
-
-volatile std::atomic<bool> ctrlc = false;
-volatile std::atomic<bool> ctrlint = false;
-inline bool CtrlC()
-{
-    return (ctrlc = ctrlc.load())
-        || (ctrlint = ctrlint.load());
 }
 
 struct GState {
@@ -72,6 +63,9 @@ struct GState {
     std::regex regexp;
     std::string fmt;
     std::list<LinePtr> gLines;
+    WCHAR conInBuf[4096];
+    CHAR conInBufUTF8[4096 * 5];
+    std::string lastBang;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -90,6 +84,7 @@ struct GState {
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
+        , decltype(lastBang) _lastBang = {}
     )
         : filename(_filename)
         , line(_line)
@@ -108,6 +103,7 @@ struct GState {
         , regexp(_regexp)
         , fmt(_fmt)
         , gLines(_gLines)
+        , lastBang(_lastBang)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -127,6 +123,7 @@ struct GState {
         , decltype(regexp) _regexp = std::regex{".", std::regex_constants::ECMAScript}
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
+        , decltype(lastBang) _lastBang = {}
     ) {
         filename = _filename;
         line = _line;
@@ -145,6 +142,7 @@ struct GState {
         regexp = _regexp;
         fmt = _fmt;
         gLines = _gLines;
+        lastBang = _lastBang;
     } // GState::operator()
 } g_state;
 
@@ -221,8 +219,6 @@ struct ConsoleReader {
             // if they are interrupted (as defined for ^C and ^BRK)
             cprintf<CPK::CTRLC2>("reading\n");
             // maybe read something to the extent of a full line? ReadConsoleW returns after \n
-            WCHAR buf[256];
-            CHAR buf2[256 * 5];
 #ifdef CTRLV
             CONSOLE_READCONSOLE_CONTROL lpCRC;
             memset(&lpCRC, 0, sizeof(CONSOLE_READCONSOLE_CONTROL));
@@ -234,8 +230,8 @@ struct ConsoleReader {
 
             auto success = ReadConsoleW(
                     TheConsoleStdin,
-                    &buf,
-                    sizeof(buf)/sizeof(buf[0]) - 1,
+                    &g_state.conInBuf,
+                    sizeof(g_state.conInBuf)/sizeof(g_state.conInBuf[0]) - 1,
                     &rv,
 #ifdef CTRLV
                     &lpCRC
@@ -243,7 +239,7 @@ struct ConsoleReader {
                     NULL
 #endif
                     );
-            buf[sizeof(buf) / sizeof(buf[0]) - 1] = L'\0';
+            g_state.conInBuf[sizeof(g_state.conInBuf) / sizeof(g_state.conInBuf[0]) - 1] = L'\0';
             if(GetLastError() != 0) {
                 cprintf<CPK::CTRLC>("ERROR_OPERATION_ABORTED is %lu\n", ERROR_OPERATION_ABORTED);
                 cprintf<CPK::CTRLC>("ERROR_INVALID_ARGUMENT is 87\n");
@@ -253,7 +249,7 @@ struct ConsoleReader {
 
                 fprintf(stderr, "Read %lu chars: ", rv);
                 for(size_t i = 0; i < rv; ++i)
-                    fprintf(stderr, "\\x%04X", buf[i]);
+                    fprintf(stderr, "\\x%04X", g_state.conInBuf[i]);
                 fprintf(stderr, "\n");
             }
 #ifdef CTRLV
@@ -300,12 +296,12 @@ struct ConsoleReader {
 
             if(GetLastError() == 0 && rv > 0) {
                 // FIXME NULL obviously terminates the string somewhere
-                auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, buf, rv, buf2, sizeof(buf2) - 1, NULL, NULL);
-                buf2[cchbuf] = '\0';
+                auto cchbuf = WideCharToMultiByte(CP_UTF8, 0, g_state.conInBuf, rv, g_state.conInBufUTF8, sizeof(g_state.conInBufUTF8) - 1, NULL, NULL);
+                g_state.conInBufUTF8[cchbuf] = '\0';
                 for(size_t i = 0; i < cchbuf; ++i) {
-                    buffer.push_back(buf2[i]);
+                    buffer.push_back(g_state.conInBufUTF8[i]);
                 }
-                cprintf<CPK::CTRLC>("As utf8: %s\n", buf2);
+                cprintf<CPK::CTRLC>("As utf8: %s\n", g_state.conInBufUTF8);
             }
 
             // In the event that ReadConsoleA fails (I never saw it fail yet)
@@ -529,6 +525,13 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s);
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream);
 
 namespace CommandsImpl {
+    std::string getShellCommand(std::string const& tail)
+    {
+        // don't skip whitespace
+        if(tail[0] == '!') return g_state.lastBang;
+        else return tail;
+    }
+
     void r(Range range, std::string tail)
     {
         cprintf<CPK::r>("r: n before = %zd\n", g_state.nlines);
@@ -537,8 +540,77 @@ namespace CommandsImpl {
         if(tail.empty()) tail = g_state.filename;
         if(tail.empty()) throw JakEDException("No such file!");
         size_t bytes = 0;
+
+
+        // navigate to insertion point
+        int originalNlines = g_state.nlines;
+        auto after = g_state.swapfile.head();
+        while(nthLine-- > 0
+                && after->next())
+        {
+            after = after->next();
+            if(CtrlC()) {
+                cprintf<CPK::CTRLC>("r: ctrlc invoked while skipping\n");
+                cprintf<CPK::r>("r: ctrlc invoked while skipping\n");
+                return;
+            }
+        }
+        bool bomChecked = false;
+        //g_state.nlines = 0;
+        auto continueFrom = after->next();
+        cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (static_cast<std::string>(after->text()).c_str()) : "<EOF>", (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "<EOF>");
+
         if(tail[0] == '!') {
-            throw JakEDException("shell execution is not implemented");
+            // TODO refactor common code out into function which operates on lines
+            int linesInserted = 0;
+            auto sink = [&after, continueFrom, &bomChecked, &bytes, &linesInserted](std::string const& s) {
+                // note: this is called from a separate thread
+                if(CtrlC()) return;
+                bytes += s.size() + 1;
+                ++linesInserted;
+                cprintf<CPK::r>("Adding %s after %s and before %s\n",
+                        s.c_str(),
+                        (after) ? static_cast<std::string>(after->text()).c_str() : "EOF",
+                        (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "EOF");
+                auto inserted = g_state.swapfile.line(s);
+                inserted->link(continueFrom);
+                after->link(inserted);
+                after = inserted;
+                ++g_state.nlines;
+            };
+
+            std::exception_ptr ex;
+            try {
+                // blocking
+                g_state.lastBang = getShellCommand(tail.substr(1));
+                Process::SpawnAndWait(
+                        g_state.filename,
+                        g_state.lastBang,
+                        {},
+                        sink);
+            } catch(...) {
+                ex = std::current_exception();
+            }
+            g_state.writeStringFn("!\n");
+            cprintf<CPK::r>("read %d lines\n", linesInserted);
+            if(linesInserted) {
+                cprintf<CPK::r>("set dirty flag\n");
+                g_state.dirty = true;
+            }
+
+            std::stringstream undoBuffer;
+            undoBuffer << range.second + 1 << "," << (range.second + linesInserted) << "d";
+            auto undoHead = g_state.swapfile.line(undoBuffer.str());
+            g_state.swapfile.undo(undoHead);
+
+            std::stringstream bytesAsString;
+            bytesAsString << bytes << std::endl;
+            g_state.writeStringFn(bytesAsString.str());
+            g_state.line = range.second + linesInserted;
+
+            if(ex) std::rethrow_exception(ex);
+
+            return;
         }
         FILE* f = fopen(tail.c_str(), "r");
         struct AtEnd {
@@ -547,24 +619,8 @@ namespace CommandsImpl {
             ~AtEnd() { fclose(f); }
         } atEnd(f);
         if(f) {
-            int originalNlines = g_state.nlines;
-            auto after = g_state.swapfile.head();
-            while(nthLine-- > 0
-                    && after->next())
-            {
-                after = after->next();
-                if(CtrlC()) {
-                    cprintf<CPK::CTRLC>("r: ctrlc invoked while skipping\n");
-                    cprintf<CPK::r>("r: ctrlc invoked while skipping\n");
-                    return;
-                }
-            }
             std::stringstream line;
             int c;
-            bool bomChecked = false;
-            //g_state.nlines = 0;
-            auto continueFrom = after->next();
-            cprintf<CPK::r>("will continue after %s with %s\n", (after) ? (static_cast<std::string>(after->text()).c_str()) : "<EOF>", (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "<EOF>");
             while(!feof(f) && (c = fgetc(f)) != EOF) {
                 if(CtrlC()) {
                     cprintf<CPK::CTRLC>("r: ctrlc invoked while reading\n");
@@ -632,7 +688,7 @@ namespace CommandsImpl {
     {
         tail = getFileName(tail);
         if(tail[0] == '!') {
-            throw JakEDException("shell execution is not implemented");
+            cprintf<CPK::r>("E: forwarding shell command to r. Not setting filename\n");
         } else {
             g_state.filename = tail;
         }
@@ -644,7 +700,7 @@ namespace CommandsImpl {
         g_state.swapfile.head()->link();
         g_state.nlines = 0;
         r(Range::S(0), tail);
-        g_state.dirty = false;
+        g_state.dirty = (tail[0] == '!');
     } // E
 
     void e(Range range, std::string tail)
@@ -805,7 +861,7 @@ namespace CommandsImpl {
             g_state.writeStringFn(ss.str());
             return;
         }
-        if(tail[0] == '!') throw JakEDException("Writing to a shell command's STDIN is not implemented");
+        if(tail[0] == '!') throw JakEDException("Invalid filename");
         size_t i = tail.size();
         while(tail[i - 1] == ' ') --i;
         if(i < tail.size()) tail = tail.substr(0, i);
@@ -826,31 +882,73 @@ namespace CommandsImpl {
         if(r.first < 1 || r.second < 1 || r.first > g_state.nlines || r.second > g_state.nlines) throw JakEDException("Invalid range");
         fname = getFileName(fname);
         FILE* f;
-        if(fname[0] == '!') throw new std::runtime_error("Writing to pipe not implemented");
-        else {
-            f = fopen(fname.c_str(), mode);
-            if(!f) throw JakEDException("Cannot open file for writing");
-            if(g_state.filename.empty()) g_state.filename = fname;
-        }
 
         size_t nBytes = 0;
 
         auto i1 = g_state.swapfile.head();
-        auto first = r.first, second = r.second;
+        auto first = r.first, second = r.second - r.first + 1;
         while(first-- > 0) {
             cprintf<CPK::W>("skipping %s\n", (i1) ? static_cast<std::string>(i1->text()).c_str() : "<EOF>");
             i1 = i1->next();
+            if(CtrlC()) throw JakEDException("Interrupted");
         }
         if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
+
+        if(fname[0] == '!') {
+            int i = 0;
+            auto emitter = [&i1, &second, &i, &nBytes]() -> int {
+                do {
+                    if(second == 0) {
+                        return EOF;
+                    }
+                    if(i > i1->length()) { // +1 intentional, see below
+                        second--;
+                        i = 0;
+                        i1 = i1->next();
+                        continue;
+                    }
+                    ++nBytes;
+                    if(i == i1->length()) {
+                        ++i;
+                        return '\n'; // TODO \r\n?
+                    }
+                    if(i < i1->length()) {
+                        return (char)i1->text().data()[i++];
+                    }
+                } while(1);
+            };
+            std::exception_ptr ex;
+            try {
+                g_state.lastBang = getShellCommand(fname.substr(1));
+                Process::SpawnAndWait(
+                        g_state.filename,
+                        g_state.lastBang,
+                        emitter,
+                        {});
+            } catch(...) {
+                ex = std::current_exception();
+            }
+            g_state.writeStringFn("!\n");
+            std::stringstream ss;
+            ss << nBytes << std::endl;
+            g_state.writeStringFn(ss.str());
+            return;
+        }
+
+        f = fopen(fname.c_str(), mode);
+        if(!f) throw JakEDException("Cannot open file for writing");
+        if(g_state.filename.empty()) g_state.filename = fname;
+
         while(second-- > 0 && i1) {
             if(i1) cprintf<CPK::W>("Writing %s\n", static_cast<std::string>(i1->text()).c_str());
             nBytes += i1->length() + strlen("\n");
             fprintf(f, "%s\n", static_cast<std::string>(i1->text()).c_str());
             i1 = i1->next();
+            if(CtrlC()) break;
         }
         fclose(f);
         //g_state.swapfile.gc();
-        g_state.dirty = false;
+        g_state.dirty = CtrlC(); //false;
         std::stringstream ss;
         ss << nBytes << std::endl;
         g_state.writeStringFn(ss.str());
@@ -1720,6 +1818,126 @@ namespace CommandsImpl {
         if(exitWithInvalidTail) throw JakEDException("The g, G, v and V commands may not appear in the command-list of a g, G, v or V command");
     } // g
 
+    void Shell(Range r, std::string tail)
+    {
+        if(r.second != 0) throw JakEDException("Internal error: unexpected valid range");
+        tail = tail.substr(SkipWS(tail, 0));
+        g_state.lastBang = getShellCommand(tail);
+        std::exception_ptr ex;
+        try {
+            Process::SpawnAndWait(
+                    g_state.filename,
+                    g_state.lastBang,
+                    {},
+                    {});
+        } catch(...) {
+            ex = std::current_exception();
+        }
+        g_state.writeStringFn("!\n");
+        if(ex) std::rethrow_exception(ex);
+    }
+
+    void Filter(Range r, std::string tail)
+    {
+        if(r.second == 0) throw JakEDException("Internal error: unexpected valid range");
+        tail = tail.substr(SkipWS(tail, 0));
+
+        // TODO undo, preserve dot, nlines, structure, etc
+
+        size_t nBytes = 0;
+
+        auto after = g_state.swapfile.head();
+        auto first = r.first, second = r.second - r.first + 1;
+        while(first-- > 1) {
+            cprintf<CPK::W>("skipping %s\n", (after) ? static_cast<std::string>(after->text()).c_str() : "<EOF>");
+            after = after->next();
+            if(CtrlC()) throw JakEDException("Interrupted");
+        }
+        auto i1 = after->next();
+        auto i2 = after;
+        for(int sz = second; sz > 0 && i2; --sz) {
+            i2 = i2->next();
+        }
+        auto continueFrom = i2->next();
+        if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
+
+        int i = 0;
+        auto emitter = [&second, &i1, &nBytes, &i]() -> int {
+            do {
+                if(second == 0) {
+                    return EOF;
+                }
+                if(i > i1->length()) { // +1 intentional, see below
+                    second--;
+                    i = 0;
+                    i1 = i1->next();
+                    continue;
+                }
+                ++nBytes;
+                if(i == i1->length()) {
+                    ++i;
+                    return '\n'; // TODO \r\n?
+                }
+                if(i < i1->length()) {
+                    return (char)i1->text().data()[i++];
+                }
+            } while(1);
+        };
+
+        size_t bytes = 0;
+        size_t linesInserted = 0;
+        auto sink = [&bytes, &linesInserted, &after, continueFrom](std::string const& s) {
+            // note: this is called from a separate thread
+            if(CtrlC()) return;
+            bytes += s.size() + 1;
+            ++linesInserted;
+            cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %d\n", linesInserted, bytes, -1);
+            cprintf<CPK::r>("Adding %s after %s and before %s\n",
+                    s.c_str(),
+                    (after) ? static_cast<std::string>(after->text()).c_str() : "EOF",
+                    (continueFrom) ? static_cast<std::string>(continueFrom->text()).c_str() : "EOF");
+            auto inserted = g_state.swapfile.line(s);
+            inserted->link(continueFrom);
+            after->link(inserted);
+            after = inserted;
+            ++g_state.nlines;
+        };
+
+        // unlink lines we're filtering
+        after->link(); // before r.first
+        i2->link(); // before continueFrom
+        g_state.nlines -= second; // FIXME we're not actually testing what we've unlinked
+
+        // TODO undo, don't modify the file if nothing happened
+        g_state.dirty = true;
+        std::exception_ptr ex;
+        try {
+            g_state.lastBang = getShellCommand(tail);
+            Process::SpawnAndWait(
+                    g_state.filename,
+                    g_state.lastBang,
+                    emitter,
+                    sink);
+        } catch(...) {
+            ex = std::current_exception();
+        }
+
+        if(linesInserted) g_state.line = r.first + linesInserted - 1;
+        g_state.writeStringFn("!\n");
+
+        cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %zd\n", linesInserted, bytes, nBytes);
+
+        if(ex) std::rethrow_exception(ex);
+    }
+
+    void BANG(Range r, std::string tail)
+    {
+        cprintf<CPK::shell>("Range is [%d,%d]\n", r.first, r.second);
+        cprintf<CPK::shell>("Tail is %s\n", tail.c_str());
+        if(r.second == 0) return Shell(r, tail);
+        else return Filter(r, tail);
+    }
+
 } // namespace CommandsImpl
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -1755,6 +1973,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'v', &CommandsImpl::gImpl<CommandsImpl::GFlags::Reverse> },
     { 'G', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive> },
     { 'V', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive|CommandsImpl::GFlags::Reverse> },
+    { '!', &CommandsImpl::BANG },
 }; // Commands
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
@@ -2185,6 +2404,9 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case '5': case '6': case '7': case '8': case '9':
             std::tie(r, i) = ParseRange(s, i);
             break;
+        case '!':
+            r = Range::S(0); // rangeless means simple shell escape
+            break;
     } // switch range first char
     switch(s[i]) {
         case '\0':
@@ -2209,12 +2431,11 @@ void ErrorOccurred(std::exception& ex)
     g_state.error = true;
     g_state.diagnostic = ex.what();
     cprintf<CPK::error>("%s\n", ex.what());
+    g_state.writeStringFn("?\n"); // compliance, H mode still prints out the question mark, and then prints out the message
     if(g_state.Hmode) {
         std::stringstream ss;
         ss << g_state.diagnostic << std::endl;
         g_state.writeStringFn(ss.str());
-    } else {
-        g_state.writeStringFn("?\n");
     }
     if(!ISATTY(_fileno(stdin))) CommandsImpl::Q(Range(), "");
 } // ErrorOccurred
@@ -2362,6 +2583,9 @@ int main(int argc, char* argv[])
         if(file.empty()) exit_usage("No such file!", argv[0]);
         Commands.at('r')(Range::ZERO(), file);
         g_state.dirty = false;
+        if(file[SkipWS(file, 0)] != '!') {
+            g_state.filename = file;
+        }
     }
 
     Loop();

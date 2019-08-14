@@ -1,0 +1,2 @@
+E!echo Test input file was: $
+w test.tmp
