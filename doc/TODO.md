@@ -71,11 +71,11 @@ Misc
     - [x] i
     - [x] t
     - [ ] r
-    - [ ] a
+    - [x] a
     - [ ] c
     - [x] j
     - [ ] s//
-    - [ ] x
+    - [x] x
     - [ ] e
   * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
     ```
