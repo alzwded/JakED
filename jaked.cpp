@@ -697,11 +697,11 @@ namespace CommandsImpl {
         g_state.registers.clear();
         auto undoBuffer = g_state.swapfile.line("1,$c");
         undoBuffer->link(g_state.swapfile.head()->next());
-        g_state.swapfile.undo(undoBuffer);
         g_state.swapfile.cut(g_state.swapfile.head()->next());
         g_state.swapfile.head()->link();
         g_state.nlines = 0;
         r(Range::S(0), tail);
+        g_state.swapfile.undo(undoBuffer);
         g_state.dirty = (tail[0] == '!');
     } // E
 
