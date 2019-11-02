@@ -15,7 +15,7 @@ Navigation
 + [ ] ^ means -
 + [x] ;
 + [x] 'r
-+ [ ] ranges which are not explicitly numeric print the line number instead/as well
++ [ ] ~~ranges which are not explicitly numeric print the line number instead/as well~~
 
 Regex
 -----
@@ -64,6 +64,22 @@ Misc
 ----
 
 + [ ] u, see [design document](UndoAndSwapFile.md)
+  * [ ] validate commands
+    - [x] g//s//
+    - [x] m
+    - [x] d
+    - [x] i
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
+    - [ ]
   * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
     ```
     undo:       pPrevUndo 8 pUndoCmd1
