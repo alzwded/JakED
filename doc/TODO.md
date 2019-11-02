@@ -201,8 +201,9 @@ Summary
 
 Big topics:
 
-+ [ ] Shell escapes
++ [x] Shell escapes
 + [ ] Command line arguments
-+ [ ] Undo
++ [x] Undo
++ [ ] Multilevel undo -- the back-end support is there, I just have to go over all commands and use an extra indirect line reference to keep track of th undo stack
 
 Other small topics remain, but `ed` is usable even if those topics are open.
