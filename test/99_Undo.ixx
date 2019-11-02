@@ -1,3 +1,15 @@
+       auto fn = WriteFn({
+           "Line 1 aaa",
+           "Line 2 aab",
+           "Line 3 aba",
+           "Line 4 a a",
+           "Line 5 ab a",
+           "Line 6 a ba",
+           "Line 7 a b a",
+           "Line 8 b aa",
+           "Line 9 aa b",
+           "Line 10 b a a",
+       });
         SUITE_SETUP() {
             g_state();
             auto after = g_state.swapfile.head();
@@ -25,18 +37,6 @@
         } SUITE_SETUP_END();
 
         DEF_TEST(undoGlobalSubstitution) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -59,18 +59,6 @@ u
         } END_TEST();
 
         DEF_TEST(undoMoveBefore) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -94,18 +82,6 @@ u
         } END_TEST();
 
         DEF_TEST(undoMoveBefore2) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -129,18 +105,6 @@ u
         } END_TEST();
 
         DEF_TEST(undoMoveAfter) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -162,19 +126,29 @@ u
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(undoMoveAfter2) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3,7m9
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
         DEF_TEST(undoDeleteSome) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -197,18 +171,6 @@ u
         } END_TEST();
 
         DEF_TEST(undoDeleteAll) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -231,18 +193,6 @@ u
         } END_TEST();
 
         DEF_TEST(undoInsert) {
-            auto fn = WriteFn({
-                "Line 1 aaa",
-                "Line 2 aab",
-                "Line 3 aba",
-                "Line 4 a a",
-                "Line 5 ab a",
-                "Line 6 a ba",
-                "Line 7 a b a",
-                "Line 8 b aa",
-                "Line 9 aa b",
-                "Line 10 b a a",
-            });
             TEST_SETUP() {
                 auto state = std::make_shared<int>(0);
                 g_state.readCharFn = [state]() -> int {
@@ -250,6 +200,117 @@ u
 This line should be deleted.
 As should this one.
 .
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undoTransferBefore) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3,7t0
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undoTransferBefore2) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3,7t1
+H
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undoTransferAfter) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3,7t$
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undoTransferAfter2) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3,7t9
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undoTransferSelf) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3t3
 u
 )";
                     if(*state >= strlen(s)) return EOF;

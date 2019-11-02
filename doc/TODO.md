@@ -63,20 +63,20 @@ Display
 Misc
 ----
 
-+ [ ] u, see [design document](UndoAndSwapFile.md)
++ [x] u, see [design document](UndoAndSwapFile.md)
   * [ ] validate commands
     - [x] g//s//
     - [x] m
     - [x] d
     - [x] i
-    - [ ] e
+    - [x] t
     - [ ] r
     - [ ] a
     - [ ] c
     - [ ] j
     - [ ] s//
     - [ ] x
-    - [ ] t
+    - [ ] e
   * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
     ```
     undo:       pPrevUndo 8 pUndoCmd1
