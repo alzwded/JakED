@@ -15,4 +15,11 @@ inline bool CtrlC()
         || (ctrlint = ctrlint.load());
 }
 
+struct application_exit : std::exception
+{
+    bool m_error;
+    application_exit(bool error) : std::exception("This should not be reported as an error"), m_error(error) {}
+    bool ExitedWithError() const { return m_error; }
+};
+
 #endif

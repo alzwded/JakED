@@ -10,14 +10,16 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "swapfile.h"
-
 #include <vector>
 #include <list>
+#include <memory>
 #include <cstdio>
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <type_traits>
+
+#include "swapfile.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -839,13 +841,24 @@ inline void MappedLine::link(LinePtr const& p)
 inline Text MappedLine::ref()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    return Text(RefMagic, (uint8_t*)&me->text[0]);
+    uint8_t* tOffset = new uint8_t[sizeof(decltype(offset))];
+    for(int i = 0; i < sizeof(decltype(offset)); ++i) {
+        tOffset[i] = (offset >> (8 * i)) & 0xFF;
+    }
+    return Text(RefMagic, tOffset, std::function<void(void*)>([](void* p) {
+                    uint8_t* pp = reinterpret_cast<uint8_t*>(p);
+                    delete[] pp;
+                }));
 }
 
 inline LinePtr MappedLine::deref()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    return std::make_shared<MappedLine>(file, *(decltype(offset)*)&me->text[0]);
+    std::make_unsigned<decltype(offset)>::type refd = 0u;
+    for(int i = 0; i < sizeof(decltype(offset)); ++i) {
+        refd |= static_cast<decltype(refd)>(me->text[i]) << (8 * i);
+    }
+    return std::make_shared<MappedLine>(file, (decltype(offset))(refd));
 }
 
 class MemoryImpl : public FileImpl

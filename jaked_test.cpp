@@ -21,13 +21,6 @@ struct test_error : std::exception
     {}
 };
 
-struct application_exit : std::exception
-{
-    bool m_error;
-    application_exit(bool error) : std::exception("This should not be reported as an error"), m_error(error) {}
-    bool ExitedWithError() const { return m_error; }
-};
-
 #include <cstdio>
 int TEST_isatty = 1;
 int override_isatty(int fd)
@@ -295,6 +288,10 @@ void DEFINE_SUITES() {
 
     DEF_SUITE(95_Global) {
 #       include "test/95_Global.ixx"
+   } END_SUITE();
+ 
+    DEF_SUITE(99_Undo) {
+#       include "test/99_Undo.ixx"
     } END_SUITE();
 }
 

@@ -10,8 +10,6 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "swapfile.h"
-
 #include <cstdio>
 #include <cstdlib>
 #include <regex>
@@ -24,6 +22,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <cstdarg>
 #include <optional>
 #include <deque>
+
+#include "swapfile.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
@@ -524,6 +524,8 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s);
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream);
 
+void Loop();
+
 namespace CommandsImpl {
     std::string getShellCommand(std::string const& tail)
     {
@@ -695,11 +697,11 @@ namespace CommandsImpl {
         g_state.registers.clear();
         auto undoBuffer = g_state.swapfile.line("1,$c");
         undoBuffer->link(g_state.swapfile.head()->next());
-        g_state.swapfile.undo(undoBuffer);
         g_state.swapfile.cut(g_state.swapfile.head()->next());
         g_state.swapfile.head()->link();
         g_state.nlines = 0;
         r(Range::S(0), tail);
+        g_state.swapfile.undo(undoBuffer);
         g_state.dirty = (tail[0] == '!');
     } // E
 
@@ -729,10 +731,7 @@ namespace CommandsImpl {
     void Q(Range r, std::string tail)
     {
         cprintf<CPK::Q>("in Q %d\n", (int)g_state.error);
-#ifdef JAKED_TEST
         throw application_exit(g_state.error);
-#endif
-        exit(g_state.error);
     }
 
     void q(Range range, std::string tail)
@@ -1094,7 +1093,7 @@ namespace CommandsImpl {
             g_state.swapfile.cut(beforeDelete->next());
         }
         std::stringstream undoCommand;
-        undoCommand << r.first << "i";
+        undoCommand << (r.first - 1) << "a";
         auto inserted = g_state.swapfile.line(undoCommand.str());
         inserted->link(beforeDelete->next());
         g_state.swapfile.undo(inserted);
@@ -1431,18 +1430,20 @@ namespace CommandsImpl {
         auto newLine = 0;
         cprintf<CPK::MandT>("M,N P = %d,%d %d\n", r.first, r.second, destination.second);
         if(destination.second > r.second) {
-            undoBuffer << (destination.second - (r.second - r.first + 1) + 1)
+            auto nLines = r.second - r.first + 1;
+            undoBuffer << destination.second - nLines + 1
                 << ","
-                << (destination.second)
+                << destination.second
                 << "m"
-                << (r.second - 1);
+                << r.first - 1;
             newLine = destination.second;
         } else if(destination.second < r.first) {
-            undoBuffer << (r.first - destination.second)
+            auto nLines = r.second - r.first + 1;
+            undoBuffer << destination.second + 1
                 << ","
-                << (r.first - destination.second + (r.second - r.first + 1))
+                << destination.second + nLines - 1
                 << "m"
-                << (r.second);
+                << r.second;
             newLine = destination.second + r.second - r.first + 1;
         } else {
             throw JakEDException("Destination overlaps with source");
@@ -1938,6 +1939,39 @@ namespace CommandsImpl {
         else return Filter(r, tail);
     }
 
+    void u(Range r, std::string tail)
+    {
+        auto head = g_state.swapfile.undo();
+
+        auto l = head;
+        std::exception_ptr ex;
+        auto oldReadCharFn = g_state.readCharFn;
+        try {
+            int state = 0;
+            g_state.readCharFn = std::function<int()>(
+                    [&state, &l]() -> int {
+                    if(!l) return EOF;
+                    auto ll = l->Copy();
+                    if(l->IsIndirectHandle()) ll = l->deref();
+                    auto&& s = ll->text();
+                    if(state < s.size()) return (char)s.data()[state++];
+                    if(state == s.size()) {
+                        l = l->next();   
+                        state = 0;
+                        return '\n';
+                    }
+                    throw JakEDException("Internal error: invalid state");
+            });
+            Loop();
+        } catch(application_exit&) {
+            /*NOP*/
+        } catch(...) {
+            ex = std::current_exception();
+        }
+        g_state.readCharFn = oldReadCharFn;
+        if(ex) std::rethrow_exception(ex);
+    } // u
+
 } // namespace CommandsImpl
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -1974,6 +2008,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'G', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive> },
     { 'V', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive|CommandsImpl::GFlags::Reverse> },
     { '!', &CommandsImpl::BANG },
+    { 'u', &CommandsImpl::u },
 }; // Commands
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
@@ -2510,9 +2545,9 @@ void Loop()
 #ifdef JAKED_TEST
         } catch(test_error& e) {
             std::rethrow_exception(std::current_exception());
+#endif
         } catch(application_exit& e) {
             std::rethrow_exception(std::current_exception());
-#endif
         } catch(std::exception& ex) {
             ErrorOccurred(ex);
         } catch(...) {
@@ -2588,6 +2623,10 @@ int main(int argc, char* argv[])
         }
     }
 
-    Loop();
+    try {
+        Loop();
+    } catch(application_exit& ae) {
+        exit(ae.m_error);
+    }
     return 0;
 }
