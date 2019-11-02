@@ -17,6 +17,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <type_traits>
 
 #include "swapfile.h"
 
@@ -853,11 +854,11 @@ inline Text MappedLine::ref()
 inline LinePtr MappedLine::deref()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
-    decltype(offset) refd = 0;
+    std::make_unsigned<decltype(offset)>::type refd = 0u;
     for(int i = 0; i < sizeof(decltype(offset)); ++i) {
-        refd |= me->text[i] << (8 * i);
+        refd |= static_cast<decltype(refd)>(me->text[i]) << (8 * i);
     }
-    return std::make_shared<MappedLine>(file, refd);
+    return std::make_shared<MappedLine>(file, (decltype(offset))(refd));
 }
 
 class MemoryImpl : public FileImpl
