@@ -1093,7 +1093,7 @@ namespace CommandsImpl {
             g_state.swapfile.cut(beforeDelete->next());
         }
         std::stringstream undoCommand;
-        undoCommand << r.first << "i";
+        undoCommand << (r.first - 1) << "a";
         auto inserted = g_state.swapfile.line(undoCommand.str());
         inserted->link(beforeDelete->next());
         g_state.swapfile.undo(inserted);
