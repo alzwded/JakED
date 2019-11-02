@@ -1430,18 +1430,20 @@ namespace CommandsImpl {
         auto newLine = 0;
         cprintf<CPK::MandT>("M,N P = %d,%d %d\n", r.first, r.second, destination.second);
         if(destination.second > r.second) {
-            undoBuffer << (destination.second - (r.second - r.first + 1) + 1)
+            auto nLines = r.second - r.first + 1;
+            undoBuffer << destination.second - nLines + 1
                 << ","
-                << (destination.second)
+                << destination.second
                 << "m"
-                << (r.second - 1);
+                << r.first - 1;
             newLine = destination.second;
         } else if(destination.second < r.first) {
-            undoBuffer << (r.first - destination.second)
+            auto nLines = r.second - r.first + 1;
+            undoBuffer << destination.second + 1
                 << ","
-                << (r.first - destination.second + (r.second - r.first + 1))
+                << destination.second + nLines - 1
                 << "m"
-                << (r.second);
+                << r.second;
             newLine = destination.second + r.second - r.first + 1;
         } else {
             throw JakEDException("Destination overlaps with source");
@@ -1949,7 +1951,7 @@ namespace CommandsImpl {
             g_state.readCharFn = std::function<int()>(
                     [&state, &l]() -> int {
                     if(!l) return EOF;
-                    auto ll = l;
+                    auto ll = l->Copy();
                     if(l->IsIndirectHandle()) ll = l->deref();
                     auto&& s = ll->text();
                     if(state < s.size()) return (char)s.data()[state++];
