@@ -74,7 +74,7 @@ Misc
     - [x] a
     - [x] c
     - [x] j
-    - [ ] s//
+    - [x] s//
     - [x] x
     - [ ] e
   * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:

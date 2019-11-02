@@ -1,15 +1,15 @@
-       auto fn = WriteFn({
-           "Line 1 aaa",
-           "Line 2 aab",
-           "Line 3 aba",
-           "Line 4 a a",
-           "Line 5 ab a",
-           "Line 6 a ba",
-           "Line 7 a b a",
-           "Line 8 b aa",
-           "Line 9 aa b",
-           "Line 10 b a a",
-       });
+        auto fn = WriteFn({
+            "Line 1 aaa",
+            "Line 2 aab",
+            "Line 3 aba",
+            "Line 4 a a",
+            "Line 5 ab a",
+            "Line 6 a ba",
+            "Line 7 a b a",
+            "Line 8 b aa",
+            "Line 9 aa b",
+            "Line 10 b a a",
+        });
         SUITE_SETUP() {
             g_state();
             auto after = g_state.swapfile.head();
@@ -594,6 +594,63 @@ u
 fix me\
 fix me\
 .
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undo_s) {
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(3s/Line/fix/
+u
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(undo_sall) {
+            auto fn = WriteFn({
+                "?",
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 9 aa b",
+                "Line 10 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(%s/[1-8]/fix/
 u
 )";
                     if(*state >= strlen(s)) return EOF;
