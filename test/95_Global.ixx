@@ -293,6 +293,47 @@ s/./=/g
             } TEST_RUN_END();
         } END_TEST();
 
+        DEF_TEST(gAddPoint5onSomeLines) {
+            auto fn = WriteFn({
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 2.5 aab",
+                "Line 3 aba",
+                "Line 4 a a",
+                "Line 4.5 a a",
+                "Line 5 ab a",
+                "Line 6 a ba",
+                "Line 6.5 a ba",
+                "Line 7 a b a",
+                "Line 8 b aa",
+                "Line 8.5 b aa",
+                "Line 9 aa b",
+                "Line 10 b a a",
+                "Line 10.5 b a a",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(g/[02468]/y\
+x\
+s/\([0-9]\) /\1.5 /
+,p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 5;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
         // ======================== v ================================
 
         DEF_TEST(SuccessfulVSall) {
