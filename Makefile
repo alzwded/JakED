@@ -70,5 +70,10 @@ version.cpp: Makefile
 	echo.extern ^"C^" const char VERSION[] = R^"($(VERSION))^";>version.cpp
 	echo.#pragma comment(linker, ^"^/include:VERSION^")>>version.cpp
 
+dist: test
+	nmake clean
+	nmake jaked.exe
+	powershell .\makedist.ps1 $(VERSION)
+
 clean:
 	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp
