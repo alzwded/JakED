@@ -33,7 +33,7 @@ jaked_debug.exe: $(SOURCES) license.cpp version.cpp
 	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_DEBUG $** /Fe$@
 
 jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx license.cpp version.cpp
-	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj $(TEST_SOURCES)
+	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj $(TEST_SOURCES) license.cpp version.cpp
 
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
