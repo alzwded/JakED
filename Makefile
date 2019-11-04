@@ -1,4 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
+VERSION=0.9.0
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp
@@ -25,13 +26,13 @@ shell \
 
 # leave above line blank
 
-jaked.exe: $(SOURCES) license.cpp
+jaked.exe: $(SOURCES) license.cpp version.cpp
 	cl /std:c++17 /EHa /O2 /Ob1 /Ox /Ot /MT $** /Fe:$@
 
-jaked_debug.exe: $(SOURCES)
+jaked_debug.exe: $(SOURCES) license.cpp version.cpp
 	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_DEBUG $** /Fe$@
 
-jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx 
+jaked_test.exe: jaked_test.cpp $(SOURCES) test\*.ixx license.cpp version.cpp
 	cl /std:c++17 /EHa /Zi /GS /GR /RTCs /RTCu /Gz /DJAKED_TEST /DJAKED_TEST_SANITY_CHECK=$(JAKED_TEST_SANITY_CHECK) /bigobj $(TEST_SOURCES)
 
 run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
@@ -65,5 +66,9 @@ license.cpp: LICENSE Makefile
     echo.)^";>>license.cpp
 	echo.#pragma comment(linker, ^"^/include:LICENSE^")>>license.cpp
 
+version.cpp: Makefile
+	echo.extern ^"C^" const char VERSION[] = R^"($(VERSION))^";>version.cpp
+	echo.#pragma comment(linker, ^"^/include:VERSION^")>>version.cpp
+
 clean:
-	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp
+	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp

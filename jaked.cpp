@@ -66,6 +66,7 @@ struct GState {
     WCHAR conInBuf[4096];
     CHAR conInBufUTF8[4096 * 5];
     std::string lastBang;
+    bool suppress = false;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -85,6 +86,7 @@ struct GState {
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
         , decltype(lastBang) _lastBang = {}
+        , decltype(suppress) _suppress = false
     )
         : filename(_filename)
         , line(_line)
@@ -104,6 +106,7 @@ struct GState {
         , fmt(_fmt)
         , gLines(_gLines)
         , lastBang(_lastBang)
+        , suppress(_suppress)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -124,6 +127,7 @@ struct GState {
         , decltype(fmt) _fmt = ""
         , decltype(gLines) _gLines = {}
         , decltype(lastBang) _lastBang = {}
+        , decltype(suppress) _suppress = {}
     ) {
         filename = _filename;
         line = _line;
@@ -143,6 +147,7 @@ struct GState {
         fmt = _fmt;
         gLines = _gLines;
         lastBang = _lastBang;
+        suppress = _suppress;
     } // GState::operator()
 } g_state;
 
@@ -593,7 +598,8 @@ namespace CommandsImpl {
             } catch(...) {
                 ex = std::current_exception();
             }
-            g_state.writeStringFn("!\n");
+            if(!g_state.suppress)
+                g_state.writeStringFn("!\n");
             cprintf<CPK::r>("read %d lines\n", linesInserted);
             if(linesInserted) {
                 cprintf<CPK::r>("set dirty flag\n");
@@ -607,7 +613,8 @@ namespace CommandsImpl {
 
             std::stringstream bytesAsString;
             bytesAsString << bytes << std::endl;
-            g_state.writeStringFn(bytesAsString.str());
+            if(!g_state.suppress)
+                g_state.writeStringFn(bytesAsString.str());
             g_state.line = range.second + linesInserted;
 
             if(ex) std::rethrow_exception(ex);
@@ -618,7 +625,7 @@ namespace CommandsImpl {
         struct AtEnd {
             FILE* f;
             AtEnd(FILE*& ff) : f(ff) {}
-            ~AtEnd() { fclose(f); }
+            ~AtEnd() { if(f) fclose(f); }
         } atEnd(f);
         if(f) {
             std::stringstream line;
@@ -666,7 +673,8 @@ namespace CommandsImpl {
             {
                 std::stringstream output;
                 output << bytes << std::endl;
-                g_state.writeStringFn(output.str());
+                if(!g_state.suppress)
+                    g_state.writeStringFn(output.str());
             }
             std::stringstream undoCommandBuf;
             undoCommandBuf << range.second + 1 << "," << (range.second + g_state.nlines - originalNlines) << "d";
@@ -927,10 +935,12 @@ namespace CommandsImpl {
             } catch(...) {
                 ex = std::current_exception();
             }
-            g_state.writeStringFn("!\n");
+            if(!g_state.suppress)
+                g_state.writeStringFn("!\n");
             std::stringstream ss;
             ss << nBytes << std::endl;
-            g_state.writeStringFn(ss.str());
+            if(!g_state.suppress)
+                g_state.writeStringFn(ss.str());
             return;
         }
 
@@ -950,7 +960,8 @@ namespace CommandsImpl {
         g_state.dirty = CtrlC(); //false;
         std::stringstream ss;
         ss << nBytes << std::endl;
-        g_state.writeStringFn(ss.str());
+        if(!g_state.suppress)
+            g_state.writeStringFn(ss.str());
     } // commonW
 
     void w(Range r, std::string tail)
@@ -1834,7 +1845,8 @@ namespace CommandsImpl {
         } catch(...) {
             ex = std::current_exception();
         }
-        g_state.writeStringFn("!\n");
+        if(!g_state.suppress)
+            g_state.writeStringFn("!\n");
         if(ex) std::rethrow_exception(ex);
     }
 
@@ -1924,7 +1936,8 @@ namespace CommandsImpl {
         }
 
         if(linesInserted) g_state.line = r.first + linesInserted - 1;
-        g_state.writeStringFn("!\n");
+        if(!g_state.suppress)
+            g_state.writeStringFn("!\n");
 
         cprintf<CPK::shell>("linesInserted = %zd, bytes = %zd, nBytes = %zd\n", linesInserted, bytes, nBytes);
 
@@ -2018,8 +2031,14 @@ void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string st
 
 void exit_usage(char* msg, char* argv0)
 {
-    fprintf(stderr, "%s\n", msg);
-    fprintf(stderr, "Usage: %s FILE\nIf FILE begins with a bang, it will be executed as a command\n", argv0);
+    if(msg) fprintf(stderr, "%s\n", msg);
+    fprintf(stderr, "Usage: %s [-hVsr] [-p PROMPT] [FILE]\nIf FILE begins with a bang, it will be executed as a command\n", argv0);
+    exit(1);
+}
+
+void exit_version(char* argv0)
+{
+    fprintf(stderr, "%s %s\n%s\n", argv0, VERSION, "Copyright (c) 2019, Vlad Me""\xc8""\x99""co\nAll rights reserved.");
     exit(1);
 }
 
@@ -2575,6 +2594,54 @@ BOOL consoleHandler(DWORD signal)
     }
 } // consoleHandler
 
+void ParseArgs(int& argc, char**& argv)
+{
+    for(int i = 1; i < argc; ++i) {
+        if(argv[i][0] == '-') {
+            for(int j = 1; j < strlen(argv[i]); ++j) {
+                switch(argv[i][j]) {
+                    case 's':
+                        g_state.suppress = true;
+                        break;
+                    case 'p':
+                        g_state.showPrompt = true;
+                        if(j + 1 < strlen(argv[i])) {
+                            ++j;
+                            std::stringstream ss;
+                            ss << argv[i][j] << ' ';
+                            g_state.PROMPT = ss.str();
+                        } else {
+                            ++i;
+                            if(i >= argc) {
+                                exit_usage("bad arguments", argv[0]);
+                            } else {
+                                g_state.PROMPT = argv[i];
+                                j = strlen(argv[i]);
+                            }
+                        }
+                        break;
+                    case 'd':
+#ifdef JAKED_DEBUG
+                        __debugbreak();
+#endif
+                        break;
+                    case 'r':
+                        exit_usage("-r not implemented", argv[0]);
+                    case 'V':
+                        exit_version(argv[0]);
+                    case 'h':
+                        exit_usage(nullptr, argv[0]);
+                    default:
+                        exit_usage("bad arguments", argv[0]);
+                }
+            }
+        } else {
+            std::string file = argv[i];
+            g_state.filename = file.substr(SkipWS(file, 0));
+        }
+    }
+} // ParseArgs
+
 int main(int argc, char* argv[])
 {
     //TheConsoleStdin = CreateFileA("CONIN$", GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -2596,30 +2663,22 @@ int main(int argc, char* argv[])
     }
     at_quick_exit(RestoreConsoleCP);
 
-    //if(argc == 1) {
-    //    exit_usage("No such file!", argv[0]);
-    //}
-
-    if(argc > 2) {
-        exit_usage("Too many arguments!", argv[0]);
-    }
-
-#ifdef JAKED_DEBUG
-    if(argc > 1 && std::string(argv[1]) == "-d") {
-        __debugbreak();
-    }
-#endif
+    ParseArgs(argc, argv);
 
     g_state.readCharFn = Interactive_readCharFn;
     g_state.writeStringFn = &Interactive_writeStringFn;
 
-    if(argc > 1) {
-        std::string file = argv[1];
-        if(file.empty()) exit_usage("No such file!", argv[0]);
-        Commands.at('r')(Range::ZERO(), file);
-        g_state.dirty = false;
-        if(file[SkipWS(file, 0)] != '!') {
-            g_state.filename = file;
+    if(!g_state.filename.empty()) {
+        try {
+            Commands.at('r')(Range::ZERO(), g_state.filename);
+            g_state.dirty = false;
+        } catch(JakEDException& ex) {
+            ErrorOccurred(ex);
+        } catch(std::exception& ex) {
+            ErrorOccurred(ex);
+        } catch(...) {
+            std::runtime_error ex("???");
+            ErrorOccurred(ex);
         }
     }
 

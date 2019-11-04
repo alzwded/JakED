@@ -183,16 +183,16 @@ Internals, Externals and Other Tasks
 + [x] refactor string processing – done, implemented swapfile.
   * [x] refactor it again to use a byte array (required for multi-level undo support without reimagining the swapfile format) –we got pointers now, woot!
 + [x] scripting behaviour (cancel on error if !isatty)
-+ [/] test that e&q cowardly refuse to exit
++ [x] test that e&q cowardly refuse to exit
 + [x] utf8 with BOM
-+ [ ] command line argument for P
-+ [ ] arg: `-s` (suppress diagnostics)
++ [x] command line argument for P
++ [x] arg: `-s` (suppress diagnostics)
 + [x] start with empty file
-+ [ ] jaked --help
-+ [ ] jaked --version
++ [x] jaked ~~--help~~ `-h`
++ [x] jaked ~~--version~~ `-V`
 + [ ] some nice html documentation, like `ed`'s man page
 + [ ] read windows-native UTF16 files (`rutf16 somefile?`)
-+ [ ] don't crash if file can't be read
++ [x] don't crash if file can't be read
 + [ ] the debug build (used to run external tests) should read a timeout from an env var to kill itself if the test takes too long
 + [ ] add a command line flag for recovery
 
@@ -202,7 +202,7 @@ Summary
 Big topics:
 
 + [x] Shell escapes
-+ [ ] Command line arguments
++ [x] Command line arguments
 + [x] Undo
 + [ ] Multilevel undo -- the back-end support is there, I just have to go over all commands and use an extra indirect line reference to keep track of th undo stack
 

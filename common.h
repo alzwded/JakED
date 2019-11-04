@@ -22,4 +22,6 @@ struct application_exit : std::exception
     bool ExitedWithError() const { return m_error; }
 };
 
+extern "C" const char VERSION[];
+
 #endif
