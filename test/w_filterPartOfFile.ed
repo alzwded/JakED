@@ -1,0 +1,3 @@
+H
+3,7!cmd /s /c "echo.>NUL"
+w test.tmp

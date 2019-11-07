@@ -1,0 +1,5 @@
+H
+%!cscript /nologo test\lineManip.vbs
+u
+w test.tmp
+q

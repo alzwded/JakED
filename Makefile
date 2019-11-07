@@ -1,5 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
-VERSION=0.9.0
+VERSION=0.9.1
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp
@@ -76,4 +76,4 @@ dist: test
 	powershell .\makedist.ps1 $(VERSION)
 
 clean:
-	del /q /s *.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp
+	for %%i in (*.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp) do @if exist %%i @erase /q %%i

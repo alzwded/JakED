@@ -2,12 +2,14 @@ $out="JakED"
 rm $out -r -fo
 md $out
 cp jaked.exe -Destination $out
+cp COPYING -Destination $out
 cp LICENSE -Destination $out
 cp doc\Commands.md -Destination $out
 cp doc\EdCheatSheet.md -Destination $out
 cp doc\Global.md -Destination $out
 cp doc\Ranges.md -Destination $out
 cp doc\Regexp.md -Destination $out
+cp CHANGELOG.md -Destination $out
 $compress = @{
 Path="$($out)"
 CompressionLevel = "Optimal"

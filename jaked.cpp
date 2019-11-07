@@ -1853,11 +1853,14 @@ namespace CommandsImpl {
     void Filter(Range r, std::string tail)
     {
         if(r.second == 0) throw JakEDException("Internal error: unexpected valid range");
+        if(r.second > g_state.nlines) r = Range::R(r.first, g_state.nlines);
         tail = tail.substr(SkipWS(tail, 0));
 
         // TODO undo, preserve dot, nlines, structure, etc
 
         size_t nBytes = 0;
+        auto uh = g_state.swapfile.line("");
+        auto ul = uh->Copy();
 
         auto after = g_state.swapfile.head();
         auto first = r.first, second = r.second - r.first + 1;
@@ -1869,8 +1872,14 @@ namespace CommandsImpl {
         auto i1 = after->next();
         auto i2 = after;
         for(int sz = second; sz > 0 && i2; --sz) {
+            if(CtrlC()) throw JakEDException("Interrupted");
             i2 = i2->next();
+            if(i2) {
+                uh->link(g_state.swapfile.line(i2->ref()));
+                uh = uh->next();
+            }
         }
+        
         auto continueFrom = i2->next();
         if(i1) cprintf<CPK::W>("Writing from %s\n", static_cast<std::string>(i1->text()).c_str());
 
@@ -1919,9 +1928,9 @@ namespace CommandsImpl {
         // unlink lines we're filtering
         after->link(); // before r.first
         i2->link(); // before continueFrom
-        g_state.nlines -= second; // FIXME we're not actually testing what we've unlinked
+        g_state.nlines -= second; // FIXME confusing; second is modified but by code that's not yet executed
 
-        // TODO undo, don't modify the file if nothing happened
+        // TODO don't modify the file if nothing happened
         g_state.dirty = true;
         std::exception_ptr ex;
         try {
@@ -1935,7 +1944,27 @@ namespace CommandsImpl {
             ex = std::current_exception();
         }
 
-        if(linesInserted) g_state.line = r.first + linesInserted - 1;
+
+        if(linesInserted) {
+            g_state.line = r.first + linesInserted - 1;
+            std::stringstream undoBuffer;
+            undoBuffer << r.first
+                << ","
+                << r.second
+                << "c";
+            auto undoCommand = g_state.swapfile.line(undoBuffer.str());
+            undoCommand->link(ul->next());
+            g_state.swapfile.undo(undoCommand);
+        } else {
+            std::stringstream undoBuffer;
+            g_state.line = std::min(r.first - 1, 1);
+            undoBuffer << r.first - 1
+                << "a";
+            auto undoCommand = g_state.swapfile.line(undoBuffer.str());
+            undoCommand->link(ul->next());
+            g_state.swapfile.undo(undoCommand);
+            after->link(continueFrom);
+        }
         if(!g_state.suppress)
             g_state.writeStringFn("!\n");
 
@@ -2672,6 +2701,9 @@ int main(int argc, char* argv[])
         try {
             Commands.at('r')(Range::ZERO(), g_state.filename);
             g_state.dirty = false;
+            if(g_state.filename[0] == '!') {
+                g_state.filename = "";
+            }
         } catch(JakEDException& ex) {
             ErrorOccurred(ex);
         } catch(std::exception& ex) {
