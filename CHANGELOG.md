@@ -1,3 +1,13 @@
+0.9.2 -> 0.9.3
+==============
+
+* implement infinite levels of undo
+
+0.9.1 -> 0.9.2
+==============
+
+* allow `\/` in `s//`, like `s/aa/a\/a/` and it does what you think it does
+
 0.9.0 -> 0.9.1
 ==============
 

@@ -1,0 +1,30 @@
+a
+Line 1 aaa
+Line 2 aab
+Line 3 aba
+Line 4 a a
+Line 5 ab a
+Line 6 a ba
+Line 7 a b a
+Line 8 b aa
+Line 9 aa b
+Line 10 b a a
+.
+2d
+2d
+1d
+u
+1,3p
+u
+1,3p
+g/Line/s//L/\
+a\
+test
+g/test/d
+u
+1,3p
+u
+1,3p
+u
+1,3p
+Q

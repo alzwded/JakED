@@ -54,13 +54,38 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
    0  6 'Line 2'                42              Line 2 -> EOF
    0  6 'Line 3'                58              Line 3 -> EOF
    98 14 'Replace line 1'       74              Rep...ine 1 -> R... line 2
-   58 14 'Replace line 2'       98              Rep...ine 2 -> EOF
-   42 4  '2,3c'                 122             2,3c -> Line 2
+   58 14 'Replace line 2'       98              Rep...ine 2 -> Line 3
+   140 8 0x00000000             122             prev undo -> 0, undo command -> '2,3c'
+   42 4  '2,3c'                 140             2,3c -> Line 2
                                 EOF
 
    Summary: Started with a 3 line file
-            Executed 2c\nReplace line 1\nReplace line 2\n.
+            Executed 2c\nReplace line 1\nReplace line 2\n.\n
+
+   Execute 2d
+
+   Example state:
+   26                           0               head -> Line 1
+   0x0000                       8               always 0
+   42                           10              cut -> Line 2
+   122                          18              undo -> 2,3c
+   74 6 'Line 1'                26              Line 1 -> Replaced line 1
+   0  6 'Line 2'                42              Line 2 -> EOF
+   0  6 'Line 3'                58              Line 3 -> EOF
+   58 14 'Replace line 1'       74              Rep...ine 1 -> Line 3
+   58 14 'Replace line 2'       98              Rep...ine 2 -> Line 3
+   140 -1 0x00000000             122             prev undo -> 0, undo command -> '2,3c'
+   42 4  '2,3c'                 140             2,3c -> Line 2
+   172 -1 0x0000007A             154             prev undo -> 140, undo command -> '2i'
+   98 2 '2i'                    172             2i -> Replace line 2
+                                EOF
+
+   Summary: Started with a 3 line file
+            Executed 2c\nReplace line 1\nReplace line 2\n.\n2d\n
+
 */
+
+class Swapfile;
 
 static constexpr uint16_t RefMagic = (uint16_t)-1;
 
@@ -173,6 +198,10 @@ struct ISwapImpl
       */
     virtual void gc() = 0;
 #endif
+private:
+    friend class Swapfile;
+    virtual int64_t undoi(bool) = 0;
+    virtual void undoi(int64_t) = 0;
 };
 
 inline ISwapImpl::~ISwapImpl() = default;
@@ -222,7 +251,14 @@ public:
       * 
       * This compacts the swap file. Should be invoked after every write.
       */
-    void gc();
+    //void gc();
+
+    // call this before begining to execute reverse undo commands
+    int64_t popUndo();
+    // call this if you want to preserve the current undo mark
+    int64_t saveUndo();
+    // call this after finishing to execute reverse undo commands
+    void restoreUndo(int64_t);
 };
 
 #endif

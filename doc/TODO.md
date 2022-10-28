@@ -77,7 +77,7 @@ Misc
     - [x] s//
     - [x] x
     - [x] e
-  * [ ] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
+  * [x] multilevel undo. Requires a simple-ish change, i.e. the undo reg points to a dummy line which points to the previous undo subhead, size is 8, and the text is a pointer to the undo command:
     ```
     undo:       pPrevUndo 8 pUndoCmd1
     ...
@@ -204,6 +204,6 @@ Big topics:
 + [x] Shell escapes
 + [x] Command line arguments
 + [x] Undo
-+ [ ] Multilevel undo -- the back-end support is there, I just have to go over all commands and use an extra indirect line reference to keep track of th undo stack
++ [x] Multilevel undo -- the back-end support is there, I just have to go over all commands and use an extra indirect line reference to keep track of th undo stack
 
 Other small topics remain, but `ed` is usable even if those topics are open.

@@ -1,5 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
-VERSION=0.9.2
+VERSION=0.9.3
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp
@@ -77,3 +77,6 @@ dist: test
 
 clean:
 	for %%i in (*.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp) do @if exist %%i @erase /q %%i
+
+distclean: clean
+	rmdir/q/s JakED

@@ -1749,23 +1749,29 @@ namespace CommandsImpl {
             if(!it) continue;
 
             if constexpr(!!(flags & GFlags::Interactive)) {
+                cprintf<CPK::g>("Will send commands %s\n", static_cast<std::string>(it->text()).c_str());
                 g_state.writeStringFn(static_cast<std::string>(it->text()) + "\n");
             }
 
             g_state.line = line;
+            // hide global undo mark
+            int64_t savedMark = g_state.swapfile.saveUndo();
+            cprintf<CPK::g>("Hiding global undo mark %I64d\n", savedMark);
+            //g_state.swapfile.undo(LinePtr());
+            g_state.swapfile.restoreUndo(0); // avoid having to test how well I check for nullptr...
             try {
-                // hide global undo mark
-                g_state.swapfile.undo(LinePtr());
                 if constexpr((flags & GFlags::Interactive) != 0) {
                     // acquire out command list
                     auto fakeCommandList = ReadMultipleLines("\\");
                     commandList = decltype(commandList)(fakeCommandList.begin() + 1, fakeCommandList.end());
                     if(commandList.size() == 1 && commandList.front() == "") commandList = decltype(commandList){};
                 }
+                cprintf<CPK::g>("Executing commands:\n");
                 //for(auto&& commandLine : commandList) {
                 size_t increment = 1, state = 0;
                 for(size_t index = 0; index < commandList.size() && !exitWithInvalidTail; index+=increment) {
                     auto&& commandLine = commandList[index];
+                    cprintf<CPK::g>(">> next command: %s\n", commandLine);
                     increment = 1;
                     auto t = ParseCommand(commandLine);
                     cprintf<CPK::g>("Executing: [%d,%d]%c%s\n",
@@ -1816,7 +1822,10 @@ namespace CommandsImpl {
                 cprintf<CPK::g>("Last command failed with %s\n", ex.what());
                 g_state.line = dot;
             }
-            g_state.swapfile.undo(undoList); // restore global undo mark
+            // restore global undo mark
+            cprintf<CPK::g>("Restoring global undo mark %I64d\n", savedMark);
+            g_state.swapfile.restoreUndo(savedMark);
+            //g_state.swapfile.undo(undoList);
             if(prevReadCharFn) {
                 g_state.readCharFn = prevReadCharFn;
                 prevReadCharFn = decltype(g_state.readCharFn)();
@@ -1984,6 +1993,7 @@ namespace CommandsImpl {
     void u(Range r, std::string tail)
     {
         auto head = g_state.swapfile.undo();
+        auto savedMark = g_state.swapfile.popUndo();
 
         auto l = head;
         std::exception_ptr ex;
@@ -2011,6 +2021,7 @@ namespace CommandsImpl {
             ex = std::current_exception();
         }
         g_state.readCharFn = oldReadCharFn;
+        g_state.swapfile.restoreUndo(savedMark);
         if(ex) std::rethrow_exception(ex);
     } // u
 

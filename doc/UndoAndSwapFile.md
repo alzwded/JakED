@@ -261,3 +261,40 @@ On undo, normal stuff happens. You would expect to end up with gibberish, and yo
 Actually, let's clarify some more how undo will work in the multilevel undo case: The `c` command is bullshit. It actually goes through the GLOB list and relinks the pointed-to line to be the next pointed-to line. After undo completes, the UNDS (undo stack) list head is popped and UNDO set to the next element. That's going to be interesting to implement.
 
 During `command-list`, `u` is initially set to NUL, but it is available inside one execution for undo marks set by the commands therein. At the end, the undo mark for the whole `g//` command is set. I hope my multi-level undo list will work this way. Maybe indirect handles can help.
+
+What does an undo buffer look like?
+-----------------------------------
+
+*Disclaimer: I've implemented this much later and I was too lazy to re-read the whole document*
+
+The global undo header points to a `U` line reference whose `next` pointer points to the undo command line `Uc`; the `sz` is `-1` (magic value for references; in which case the text is actually a 64bit pointer) and `text` points to the previous undo `U1` in the stack. Next, `Uc` has `text[sz]` equal to a command that would undo whatever was done previously (e.g. for a `g//`, it is a `c`, for a `d` it is a `i`, for `i` it is a `d`); `Uc`'s `next` points to `0` if it needs no additional input, else it points to normal text lines which would be needed as input to the command.
+
+So let's say we had issued a couple of change commands:
+
+```
+0a
+a
+.
+1c
+bsd
+qwe
+zxc
+.
+1s/b/a/
+```
+
+The swap file would look something like thus: (actual text lines omitted)
+
+```
+head.undo -> U2
+...
+U1' next = 0   sz = 1  text = 'a'
+U1c next = U1' sz = 4  text = '1,3c'
+U1  next = U1c sz = -1 text = 0x00000000
+...
+U2' next = 0   sz = 1  text = 'bsd'
+U2c next = U2' sz = 4  text = '1,1c'
+U2  next = U2c sz = -1 text = <addrof U1>
+```
+
+*2nd disclaimer: I don't remember why I implemented line references, but it's good that I did*

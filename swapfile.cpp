@@ -124,7 +124,7 @@ public:
         return Text(RefMagic, (uint8_t*)(m_pos));
     }
 
-    LinePtr deref() override
+    int64_t derefi()
     {
         fpos_t offset = m_pos + offsetof(LineFormat, sz);
         fsetpos(m_file, &offset);
@@ -136,6 +136,12 @@ public:
         cprintf<CPK::swap>("[%p] Read %u chars from %I64d\n", m_file, len, m_pos);
         fpos_t target = 0;
         fread(&target, sizeof(target), 1, m_file);
+        return target;
+    }
+
+    LinePtr deref() override
+    {
+        fpos_t target = (fpos_t)derefi();
         return std::make_shared<FileLine>(m_file, target);
     }
 
@@ -272,6 +278,27 @@ public:
         return std::make_shared<FileLine>(m_file, head.undo);
     }
 
+    int64_t undoi(bool pop) override
+    {
+        fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+
+        if(head.undo == 0) {
+            cprintf<CPK::swap>("[%p] No undo buffer\n", m_file);
+            return 0;
+        }
+
+        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", m_file, head.undo);
+        if(pop) {
+            auto line = std::make_shared<FileLine>(m_file, head.undo);
+            return line->derefi();
+        } else {
+            return head.undo;
+        }
+    }
+
     LinePtr line(Text const& s) override
     {
         fseek(m_file, 0, SEEK_END);
@@ -316,7 +343,7 @@ public:
 
     LinePtr undo(LinePtr const& p)
     {
-        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
+        cprintf<CPK::swap>("Entered undo(p)\n");
 
         fseek(m_file, 0, SEEK_SET);
         Header head;
@@ -324,12 +351,38 @@ public:
         fread(&head, sizeof(Header), 1, m_file);
         cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head.undo);
 
-        head.undo = pp->m_pos;
+        auto pp = p.DownCast<FileLine>(); //std::dynamic_pointer_cast<FileLine>(p);
+        LinePtr undoHead;
+        if(pp && pp->m_pos > 0) {
+            cprintf<CPK::swap>("[%p] Asked to save undo command at %I64d\n", m_file, pp->m_pos);
+            static_assert(sizeof(fpos_t) <= sizeof(uint8_t*), "fpos_t is smaller than a pointer");
+            auto undoHead = line(Text(RefMagic, (uint8_t*)head.undo));
+            cprintf<CPK::swap>("[%p] Adding double link %I64d\n", m_file, undoHead.DownCast<FileLine>()->m_pos);
+            undoHead->link(p);
+        } else {
+            cprintf<CPK::swap>("Asked to hide undo mark\n");
+        }
+
+        head.undo = (undoHead) ? undoHead.DownCast<FileLine>()->m_pos : 0;
         fseek(m_file, 0, SEEK_SET);
         fwrite(&head, sizeof(Header), 1, m_file);
         cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head.undo);
 
         return p;
+    }
+
+    void undoi(int64_t pos)
+    {
+        fseek(m_file, 0, SEEK_SET);
+        Header head;
+        memset(&head, 0, sizeof(Header));
+        fread(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head.undo);
+
+        head.undo = pos;
+        fseek(m_file, 0, SEEK_SET);
+        fwrite(&head, sizeof(Header), 1, m_file);
+        cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head.undo);
     }
 
 #if 0
@@ -428,6 +481,8 @@ public:
     }
 
     Text ref() override;
+
+    int64_t derefi();
 
     LinePtr deref() override;
 };
@@ -701,6 +756,25 @@ public:
         return std::make_shared<MappedLine>(*this, head->undo);
     }
 
+    int64_t undoi(bool pop) override
+    {
+        EnsureSize();
+        Header* head = (Header*)(m_view);
+
+        if(head->undo == 0) {
+            cprintf<CPK::swap>("[%p] No undo buffer\n", m_file);
+            return {};
+        }
+
+        cprintf<CPK::swap>("[%p] Undo buffer points to %I64d\n", this, head->undo);
+        if(pop) {
+            auto line = std::make_shared<MappedLine>(*this, head->undo);
+            return line->derefi();
+        } else {
+            return head->undo;
+        }
+    }
+
     LinePtr line(Text const& s) override
     {
         EnsureSize(LineBaseSize
@@ -737,16 +811,49 @@ public:
 
     LinePtr undo(LinePtr const& p)
     {
+        cprintf<CPK::swap>("Entered undo(p)\n");
+        EnsureSize();
+        Header* head = (Header*)(m_view);
+
         auto pp = p.DownCast<MappedLine>(); //std::dynamic_pointer_cast<FileLine>(p);
+        LinePtr undoHead;
+
+        if(pp && pp->offset > 0) {
+            cprintf<CPK::swap>("[%p] Asked to save undo command at %I64d\n", m_file, pp->offset);
+            uint8_t* tOffset = new uint8_t[sizeof(decltype(head->undo))];
+            for(int i = 0; i < sizeof(decltype(head->undo)); ++i) {
+                tOffset[i] = (head->undo >> (8 * i)) & 0xFF;
+            }
+            auto magicText = Text(RefMagic, tOffset, std::function<void(void*)>([](void* p) {
+                        uint8_t* pp = reinterpret_cast<uint8_t*>(p);
+                        delete[] pp;
+                        }));
+            undoHead = line(magicText);
+            cprintf<CPK::swap>("[%p] Adding double link %I64d\n", m_file, undoHead.DownCast<MappedLine>()->offset);
+            undoHead->link(p);
+        } else {
+            cprintf<CPK::swap>("Asked to hide undo mark\n");
+        }
+
+        cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head->undo);
+
+        //head->undo = (pp) ? pp->offset : 0;
+        head->undo = (undoHead) ? undoHead.DownCast<MappedLine>()->offset : 0;
+        cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head->undo);
+
+        return p;
+    }
+
+    void undoi(int64_t offset)
+    {
         EnsureSize();
         Header* head = (Header*)(m_view);
 
         cprintf<CPK::swap>("[%p] Undo buffer was %I64d\n", m_file, head->undo);
 
-        head->undo = (pp) ? pp->offset : 0;
-        cprintf<CPK::swap>("--> set cut buffer to %I64d\n", head->undo);
-
-        return p;
+        //head->undo = (pp) ? pp->offset : 0;
+        head->undo = offset;
+        cprintf<CPK::swap>("--> set undo buffer to %I64d\n", head->undo);
     }
 
 #if 0
@@ -851,13 +958,19 @@ inline Text MappedLine::ref()
                 }));
 }
 
-inline LinePtr MappedLine::deref()
+inline int64_t MappedLine::derefi()
 {
     LineFormat* me = (LineFormat*)(file.m_view + offset);
     std::make_unsigned<decltype(offset)>::type refd = 0u;
     for(int i = 0; i < sizeof(decltype(offset)); ++i) {
         refd |= static_cast<decltype(refd)>(me->text[i]) << (8 * i);
     }
+    return (int64_t)(refd);
+}
+
+inline LinePtr MappedLine::deref()
+{
+    auto refd = derefi();
     return std::make_shared<MappedLine>(file, (decltype(offset))(refd));
 }
 
@@ -909,9 +1022,40 @@ Swapfile::~Swapfile()
 
 LinePtr Swapfile::head() { return m_pImpl->head(); }
 LinePtr Swapfile::cut() { return m_pImpl->cut(); }
-LinePtr Swapfile::undo() { return m_pImpl->undo(); }
+LinePtr Swapfile::undo()
+{
+    auto rval = m_pImpl->undo();
+    return rval ? rval->next() : rval;
+}
 LinePtr Swapfile::line(Text const& s) { return m_pImpl->line(s); }
-LinePtr Swapfile::undo(LinePtr const& l) { return m_pImpl->undo(l); }
+LinePtr Swapfile::undo(LinePtr const& l)
+{
+    //if(m_inhibitingUndo) return l;
+    auto rval = m_pImpl->undo(l);
+    return rval ? rval->next() : rval;
+}
 LinePtr Swapfile::cut(LinePtr const& l) { return m_pImpl->cut(l); }
 //void Swapfile::gc() { return m_pImpl->gc(); }
+int64_t Swapfile::popUndo()
+{
+    // save prev undo header
+    auto mark =  m_pImpl->undoi(/*pop=*/true);
+    cprintf<CPK::swap>("saveUndo: saved undo pointer %lld\n", mark);
+    return mark;
+}
 
+void Swapfile::restoreUndo(int64_t mark)
+{
+    cprintf<CPK::swap>("restoreUndo: setting undo pointer %lld\n", mark);
+    // commit prev undo header
+    m_pImpl->undoi(mark);
+}
+
+
+int64_t Swapfile::saveUndo()
+{
+    // save current undo header
+    auto mark =  m_pImpl->undoi(/*pop=*/false);
+    cprintf<CPK::swap>("saveUndo: saved undo pointer %lld\n", mark);
+    return mark;
+}

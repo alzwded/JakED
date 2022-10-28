@@ -667,3 +667,105 @@ u
                 fn.Assert();
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(multiple_undo) {
+            auto fn = WriteFn({
+                // first undo, reinsert line 1
+                "Line 1 aaa",
+                "Line 4 a a",
+                "Line 5 ab a",
+                // second undo, reinsert line 3
+                "Line 1 aaa",
+                "Line 3 aba",
+                "Line 4 a a",
+                // third undo, reinsert line 2
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 3 aba",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(2d
+2d
+1d
+u
+1,3p
+u
+1,3p
+u
+1,3p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(multiple_global_undo_and_branch) {
+            auto fn = WriteFn({
+                // first undo, reinsert line 1
+                "Line 1 aaa",
+                "Line 4 a a",
+                "Line 5 ab a",
+                // second undo, reinsert line 3
+                "Line 1 aaa",
+                "Line 3 aba",
+                "Line 4 a a",
+                // third undo, undo delete "test"
+                "L 1 aaa",
+                "test",
+                "L 3 aba",
+                // fourth undo, undo subst and append
+                "Line 1 aaa",
+                "Line 3 aba",
+                "Line 4 a a",
+                // fifth undo, reinsert line 2
+                "Line 1 aaa",
+                "Line 2 aab",
+                "Line 3 aba",
+            });
+            TEST_SETUP() {
+                auto state = std::make_shared<int>(0);
+                g_state.readCharFn = [state]() -> int {
+                    auto s = R"(2d
+2d
+1d
+u
+1,3p
+u
+1,3p
+g/Line/s//L/\
+a\
+test
+g/test/d
+u
+1,3p
+u
+1,3p
+u
+1,3p
+)";
+                    if(*state >= strlen(s)) return EOF;
+                    return s[(*state)++];
+                };
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                g_state.line = 1;
+                Loop();
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
