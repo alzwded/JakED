@@ -1,5 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
-VERSION=0.9.1
+VERSION=0.9.2
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp
@@ -39,7 +39,7 @@ run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
 	cmd /c test\testWriteCommands.cmd
 	cmd /c test\testStdoutCommands.cmd
-	nmake /NOLOGO sal
+	REM nmake /NOLOGO sal
 
 sal:
 	cl /std:c++17 /analyze:only /analyze:autolog- /WX /Wall $(SOURCES)

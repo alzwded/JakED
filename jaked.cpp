@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Vlad Meșco
+Copyright 2019-2022 Vlad Meșco
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -2067,7 +2067,7 @@ void exit_usage(char* msg, char* argv0)
 
 void exit_version(char* argv0)
 {
-    fprintf(stderr, "%s %s\n%s\n", argv0, VERSION, "Copyright (c) 2019, Vlad Me""\xc8""\x99""co\nAll rights reserved.");
+    fprintf(stderr, "%s %s\n%s\n", argv0, VERSION, "Copyright (c) 2019-2022, Vlad Me""\xc8""\x99""co\nAll rights reserved.");
     exit(1);
 }
 
@@ -2178,7 +2178,20 @@ std::tuple<Range, int> ParseRegister(std::string const& s, int i)
 //          ;
 std::tuple<std::string, int, bool> ParseReplaceFormat(std::string s, int i)
 {
-    auto p = s.substr(i).find('/');
+    size_t p = std::string::npos;
+    // handle escaped /
+    {
+        for(int ii = i; ii < s.size(); ++ii) {
+            if(s[ii] == '\\') {
+                ++ii;
+                continue;
+            }
+            if(s[ii] == '/') {
+                p = ii;
+                break;
+            }
+        }
+    }
     if(p == std::string::npos) {
         // in GNU ed, a lack of / at the end means as-if p was specified.
         // They also have another extension: `s/` which means `s` with `p`,

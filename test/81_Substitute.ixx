@@ -438,3 +438,41 @@
                 fn.Assert();
             } TEST_RUN_END();
         } END_TEST();
+
+        DEF_TEST(backslashSlashInReplacementInsertsSlashWithTail) {
+            auto fn = WriteFn( {
+                "Line 1 a/a/a/"
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(1), R"(/a/a\//g)");
+                ASSERT(g_state.line == 1);
+                Commands.at('p')(Range::S(1), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
+        DEF_TEST(backslashSlashInReplacementInsertsSlashWithoutTail) {
+            auto fn = WriteFn( {
+                "aaa",
+                "Line 1 a/a/a/g"
+            });
+            TEST_SETUP() {
+                g_state.writeStringFn = fn;
+            } TEST_SETUP_END();
+            TEST_TEARDOWN() {
+                setup();
+            } TEST_TEARDOWN_END();
+            TEST_RUN() {
+                Commands.at('s')(Range::S(1), R"(/aaa/a\/a\/a\/g)");
+                ASSERT(g_state.line == 1);
+                Commands.at('p')(Range::S(1), "");
+                fn.Assert();
+            } TEST_RUN_END();
+        } END_TEST();
+
