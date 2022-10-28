@@ -1,8 +1,8 @@
 # JakED
 
-nonconformant clone of `man 1 ed` for Windows which actually *will* work~~s~~.
+nonconformant clone of `man 1 ed` for Windows which actually works. I've tried various ports, they seem to struggle either with Unicode or with shell pipes. JakED corrects this state.
 
-See [TODO](doc/TODO.md) for current status.
+See [TODO](doc/TODO.md) for current status. 99% complete, but the performance is kinda bad for 200MB files (which Vim can handle neatly; my goal is to eventually beat Vim!)
 
 ## Files
 
