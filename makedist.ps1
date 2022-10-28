@@ -9,6 +9,7 @@ cp doc\EdCheatSheet.md -Destination $out
 cp doc\Global.md -Destination $out
 cp doc\Ranges.md -Destination $out
 cp doc\Regexp.md -Destination $out
+cp doc\Shell.md -Destination $out
 cp CHANGELOG.md -Destination $out
 $compress = @{
 Path="$($out)"
