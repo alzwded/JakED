@@ -34,7 +34,7 @@ Each suite is executed in its own process, and this process kills itself after a
 
 Cases within a suite are executed in order, so you could pass state on if you're into that kind of thing.
 
-The test bad has its own sanity tests, because who tests the testers?
+The testbed has its own sanity tests, because who tests the testers?
 
 ### External tests
 
