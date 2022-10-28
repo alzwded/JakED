@@ -44,6 +44,8 @@ External tests are currently of the [execute commands, write, compare file with 
 
 The last stage of `nmake test` is MSVC's built-in static code analysis. This is mostly to check that `cprintf` and `printf` are invoked with correct parameters.
 
+*As of 2022 this is disabled because it started giving errors where it previously didn't; TODO FIXME*
+
 ## Building
 
 The only command you need is `nmake jaked.exe`. It's a stand-alone executable.
