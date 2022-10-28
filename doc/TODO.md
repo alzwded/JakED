@@ -15,7 +15,6 @@ Navigation
 + [ ] ^ means -
 + [x] ;
 + [x] 'r
-+ [ ] ~~ranges which are not explicitly numeric print the line number instead/as well~~
 
 Regex
 -----
