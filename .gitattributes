@@ -7,3 +7,10 @@ test/* binary
 # Source files are text
 *.c* text
 *.h* text
+
+# Script files are kinda platform specific
+*.ps1 text eol=crlf
+*.vbs text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.sh text eol=lf
