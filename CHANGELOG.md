@@ -4,6 +4,9 @@
 * fix issue with file lengths going negative when deleting lines in an empty
   file (#7)
 * support CRLF vs LF line endings when writing files (#8)
+* added extended commands via `:`, e.g. `:crlf`, `:help`
+* `=` now prints 0 for an empty buffer instead of erroring out with invalid 
+  range
 
 0.9.2 -> 0.9.3
 ==============
