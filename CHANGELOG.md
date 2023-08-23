@@ -1,3 +1,8 @@
+0.9.5
+=====
+
+* improved online help
+
 0.9.4
 =====
 

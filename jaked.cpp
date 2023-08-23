@@ -2077,10 +2077,99 @@ namespace CommandsImpl {
         };
 
         if(tail == "help") {
-            g_state.writeStringFn("Available commands:\n");
+            g_state.writeStringFn(R"(Commands are usually of the syntax:
+<optional range><command character><optional additional options>
+
+Ranges are of the form:
+N,M                 a range from the Nth line to Mth line
+N                   equivalent to N,N
+$                   last line
+%                   equivalent to 1,$
+,                   equivalent to 1,$
+.                   current line number
+N-P,M+Q             basic arithmetics are supported
+-P,+Q               equivalent to .-P,.+Q
+
+All commands "remember" most things, e.g.: the current line,
+the last regular expression, and so on.
+
+)");
+            g_state.writeStringFn(R"(Available commands:
+P                    toggle prompt
+[.,.]p               print
+[.,.]n               print with line numbers
+e [file]             edit file
+E [file]             edit file discarding buffer
+[$]r [file|!shell]   read file or shell command
+q                    quit
+Q                    quit discarding buffer
+h                    print last diagnostic message
+H                    automatically print last diagnostic message
+#                    ignored (used for comments)
+[.]kx                marks the last line of the specified range as 'x',
+                     where x is one of [a-z]
+[$]=                 print the line number of the last line in range
+f                    print the current file name
+f file               sets the current file name
+[1,$]w [file|!shell] write buffer to file or shell command
+[1,$]W [file|!shell] append buffer to file or shell command
+[.+1]z[1][n]         scroll from end of range a number of specified lines.
+                     z is followed by the number of lines to scroll by.
+                     The trailing number is optional, and remembered.
+                     The command may be followed by 'n', in which case it
+                     prints line numbers.
+                     zn continues scrolling with the memorized N, printing
+                     line numbers.
+[.]i                 insert mode. Ends when it encounters a line containing
+                     a single '.'. Text is inserted before last line of range.
+[.]a                 same as 'i', but text is inserted after range
+[.,.]c               deletes specified range and immediately enters insert mode
+[.,.]d               deletes specified range
+[.,+1]j[ ]           joins the lines in the range with the string immediately
+                     trailing 'j'. The default joining character is a string.
+[.,.]s/re/st/[pgN]   regexp search and replace
+                     p: print search space when substituting
+                     g: repeat substitution for all matches on a line
+                     N: a number, specifying how many times to execute 
+                        the substitution. Default is 1
+                     the regexp syntax is POSIX BRE with \+ and \?
+                     everything may be omitted, the command mostly remembers
+[.]x                 inserts text from the cut buffer after the range
+                     any command that deletes lines places the removed
+                     text in the cut buffer
+[.,.]y               yanks (copies) text into the cut buffer, without deleting
+[.,.]l               lists the range unabiguously, by spelling out
+                     non-printable characters (mostly), and appending a $ at
+                     the end of the line
+[.,.]m[.]            moves the specified range after the trailing range
+[.,.]t[.]            transfers (copies) the specified range after the trailing
+                     range
+[1,$]g/re/list       for each line that matches 're' executes the command list
+                     commands in the list are separated by a \ immediately
+                     followed by a new line
+[1,$]v/re/list       same as 'g', but executes for lines NOT matching 're'
+[1,$]G/re/           same as 'g', but interactively asks for commands
+                     an empty line means 'no op'
+                     a single & means 'repeat the last command list'
+[1,$]V/re/           same as 'G', but for lines NOT matching 're'
+[.+1]                the 'empty command'; prints the last line of the
+                     specified range
+u                    undo (infinitely)
+!shell               executes a shell command
+                     In the command line, $ is replaced with the current
+                     file name
+                     'shell' may be a single '!', meaning "last command"
+N,M!shell            when a range is specified, sends the text to the
+                     shell command, and replaces the lines in the range
+                     with the output of the shell command
+:command             executes an extended (not single character) command
+
+)");
+            g_state.writeStringFn("Available extended commands:\n");
+            g_state.writeStringFn(":help                prints this message\n");
             for(auto&& kv : xcommands) {
                 std::stringstream ss;
-                ss << std::setfill(' ') << std::setw(20) << std::left << kv.first << kv.second.second << std::endl;
+                ss << ":" << std::setfill(' ') << std::setw(20) << std::left << kv.first << kv.second.second << std::endl;
                 g_state.writeStringFn(ss.str());
             }
             return;
