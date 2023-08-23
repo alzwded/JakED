@@ -1,5 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
-VERSION=0.9.3
+VERSION=0.9.4
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp

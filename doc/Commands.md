@@ -52,3 +52,4 @@ See [Ranges](Ranges.md).
 | *NUL*   | `.+1`         | Prints out the last line of the specified range.
 | `u`     | *N/A*         | Undoes the previous action.
 | `!`     | *it's complicated* | Executes a shell command with the text immediately following it. If it is immediately followed by another `!`, it repeats the last non-repeat shell command. After the invoked command exits, it prints out a single `!`. If a range is specified, it filters the lines in the specified range using the shell command. See [Shell](Shell.md)
+| `:`     | *N/A*         | Extended commands. See builtin `:help`. Initially added to support `:crlf` and `:lf` to support different line endings
