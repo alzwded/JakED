@@ -1,3 +1,4 @@
+:lf
 E !echo hi
 E !!
 %!cscript /nologo test\cat.vbs

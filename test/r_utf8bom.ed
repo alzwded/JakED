@@ -1,3 +1,4 @@
+:lf
 E test\utf8bom.txt
 r test\utf8bom.txt
 w test.tmp

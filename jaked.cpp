@@ -45,6 +45,12 @@ void __cdecl RestoreConsoleCP()
     if(oldConsoleInputCP) SetConsoleCP(oldConsoleInputCP);
 }
 
+enum class LineEndings
+{
+    CrLf = 0,
+    Lf = 1
+};
+
 struct GState {
     std::string filename;
     int line;
@@ -67,6 +73,7 @@ struct GState {
     CHAR conInBufUTF8[4096 * 5];
     std::string lastBang;
     bool suppress = false;
+    LineEndings lineEndings = LineEndings::CrLf;
 
     GState(decltype(filename) _filename = ""
         , decltype(line) _line = 0
@@ -87,6 +94,7 @@ struct GState {
         , decltype(gLines) _gLines = {}
         , decltype(lastBang) _lastBang = {}
         , decltype(suppress) _suppress = false
+        , decltype(lineEndings) _lineEndings = LineEndings::CrLf
     )
         : filename(_filename)
         , line(_line)
@@ -107,6 +115,7 @@ struct GState {
         , gLines(_gLines)
         , lastBang(_lastBang)
         , suppress(_suppress)
+        , lineEndings(_lineEndings)
     {}
 
     void operator()(decltype(filename) _filename = ""
@@ -638,7 +647,7 @@ namespace CommandsImpl {
                     return;
                 }
                 ++bytes;
-                if(c == '\n') {
+                if(c == '\n') { // TODO properly determine if line endings are crlf and count bytes correctly
                     auto s = line.str();
                     // clear UTF8 BOM if it's there
                     if(!bomChecked && bytes >= 3
@@ -908,7 +917,13 @@ namespace CommandsImpl {
                     if(second == 0) {
                         return EOF;
                     }
-                    if(i > i1->length()) { // +1 intentional, see below
+                    if(i == i1->length() + 1
+                            && g_state.lineEndings == LineEndings::CrLf)
+                    {
+                        ++nBytes;
+                        ++i;
+                        return '\n';
+                    } else if(i > i1->length()) { // +1 intentional, see below
                         second--;
                         i = 0;
                         i1 = i1->next();
@@ -917,7 +932,12 @@ namespace CommandsImpl {
                     ++nBytes;
                     if(i == i1->length()) {
                         ++i;
-                        return '\n'; // TODO \r\n?
+                        switch(g_state.lineEndings) {
+                        case LineEndings::CrLf:
+                            return '\r';
+                        case LineEndings::Lf:
+                            return '\n';
+                        }
                     }
                     if(i < i1->length()) {
                         return (char)i1->text().data()[i++];
@@ -950,8 +970,16 @@ namespace CommandsImpl {
 
         while(second-- > 0 && i1) {
             if(i1) cprintf<CPK::W>("Writing %s\n", static_cast<std::string>(i1->text()).c_str());
-            nBytes += i1->length() + strlen("\n");
-            fprintf(f, "%s\n", static_cast<std::string>(i1->text()).c_str());
+            nBytes += i1->length() + /*LF*/1 + (g_state.lineEndings == LineEndings::CrLf);
+            switch(g_state.lineEndings)
+            {
+                case LineEndings::CrLf:
+                    fprintf(f, "%s\r\n", static_cast<std::string>(i1->text()).c_str());
+                    break;
+                case LineEndings::Lf:
+                    fprintf(f, "%s\n", static_cast<std::string>(i1->text()).c_str());
+                    break;
+            }
             i1 = i1->next();
             if(CtrlC()) break;
         }
@@ -971,7 +999,7 @@ namespace CommandsImpl {
             doQuit = true;
             tail = tail.substr(SkipWS(tail, 1));
         }
-        commonW(r, tail, "w");
+        commonW(r, tail, "wb");
         if(doQuit) q(r, "");
     }
 
@@ -982,7 +1010,7 @@ namespace CommandsImpl {
             doQuit = true;
             tail = tail.substr(SkipWS(tail, 1));
         }
-        commonW(r, tail, "a");
+        commonW(r, tail, "ab");
         if(doQuit) q(r, "");
     }
 
@@ -1065,9 +1093,10 @@ namespace CommandsImpl {
             false, false, false, false, false, false};
         std::vector<std::list<LinePtr>::iterator> clobbered; // during g// execution
 
-        size_t linesDeleted = 1;
+        cprintf<CPK::d>("d: invoked with range [%d,%d]\n", r.first, r.second);
         auto it = g_state.swapfile.head();
         auto idx = r.first;
+        size_t linesDeleted = r.first > 0;
         while(idx-- > 1
                 && it->next())
         {
@@ -1078,6 +1107,7 @@ namespace CommandsImpl {
         it = it->next();
         idx = r.second - r.first + 1;
         while(idx-- > 0) {
+            cprintf<CPK::d>("d: %d lines left to delete\n", idx+1);
             for(auto kv = g_state.registers.begin(); kv != g_state.registers.end(); ++kv) {
                 if(kv->second
                         && kv->second == it)
@@ -1125,6 +1155,7 @@ namespace CommandsImpl {
         g_state.dirty = true;
         g_state.line = r.first;
         g_state.nlines -= linesDeleted;
+        cprintf<CPK::d>("d: gstate.line=%d gstate.nlines=%d\n", g_state.line, g_state.nlines);
     } // deleteLines
 
     void d(Range r, std::string)
@@ -2025,6 +2056,31 @@ namespace CommandsImpl {
         if(ex) std::rethrow_exception(ex);
     } // u
 
+    void COLON(Range r, std::string tail)
+    {
+        // TODO make this more vim like:
+        // set fileencoding=unix/dos
+        // set backup=~
+        // etc
+
+        if(tail == "crlf") {
+            g_state.lineEndings = LineEndings::CrLf;
+            return;
+        } else if(tail == "lf") {
+            g_state.lineEndings = LineEndings::Lf;
+            return;
+        } else if(tail == "help") {
+            g_state.writeStringFn(R"(Available commands:
+crlf                         windows CRLF line endings
+lf                           UNIX LF line endings
+)");
+            return;
+        } else {
+            throw JakEDException("Unknown extended command. See :help");
+        }
+
+    } // COLON
+
 } // namespace CommandsImpl
 
 std::map<char, std::function<void(Range, std::string)>> Commands = {
@@ -2062,6 +2118,7 @@ std::map<char, std::function<void(Range, std::string)>> Commands = {
     { 'V', &CommandsImpl::gImpl<CommandsImpl::GFlags::Interactive|CommandsImpl::GFlags::Reverse> },
     { '!', &CommandsImpl::BANG },
     { 'u', &CommandsImpl::u },
+    { ':', &CommandsImpl::COLON },
 }; // Commands
 
 void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string stream)
@@ -2072,7 +2129,7 @@ void ExecuteCommand(std::tuple<Range, char, std::string> command, std::string st
 void exit_usage(char* msg, char* argv0)
 {
     if(msg) fprintf(stderr, "%s\n", msg);
-    fprintf(stderr, "Usage: %s [-hVsr] [-p PROMPT] [FILE]\nIf FILE begins with a bang, it will be executed as a command\n", argv0);
+    fprintf(stderr, "Usage: %s [-hVsrWU] [-p PROMPT] [FILE]\nIf FILE begins with a bang, it will be executed as a command\n", argv0);
     exit(1);
 }
 
@@ -2511,7 +2568,7 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case '5': case '6': case '7': case '8': case '9':
             std::tie(r, i) = ParseRange(s, i);
             break;
-        case '!':
+        case '!': case ':':
             r = Range::S(0); // rangeless means simple shell escape
             break;
     } // switch range first char
@@ -2524,7 +2581,7 @@ std::tuple<Range, char, std::string> ParseCommand(std::string s)
         case 'j': case 'm': case 't': case 'y': case '!':
         case 'x': case 'r': case 'l': case 'z': case '=':
         case 'W': case 'e': case 'E': case 'f': case 'w':
-        case 'q': case 'Q': case 'n': case 's':
+        case 'q': case 'Q': case 'n': case 's': case ':':
         case '\n':
             //return std::make_tuple(r, s[i], s.substr(SkipWS(s, i+1)));
             return std::make_tuple(r, s[i], s.substr(i + 1));
@@ -2672,6 +2729,12 @@ void ParseArgs(int& argc, char**& argv)
                                 j = strlen(argv[i]);
                             }
                         }
+                        break;
+                    case 'W':
+                        g_state.lineEndings = LineEndings::CrLf;
+                        break;
+                    case 'U':
+                        g_state.lineEndings = LineEndings::Lf;
                         break;
                     case 'd':
 #ifdef JAKED_DEBUG
