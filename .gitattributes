@@ -1,12 +1,13 @@
 # Set default for people who don't have autocrlf set
-* text=auto
+# This is primarily a windows project, so use crlf all the time
+* text=auto eol=crlf
 
 # Don't mess with the test directory
 test/* binary
 
 # Source files are text
-*.c* text
-*.h* text
+*.c* text eol=crlf
+*.h* text eol=crlf
 
 # Script files are kinda platform specific
 *.ps1 text eol=crlf
