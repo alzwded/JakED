@@ -1,5 +1,5 @@
 /*
-Copyright 2019-2022 Vlad Meșco
+Copyright 2019-2023 Vlad Meșco
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -2135,7 +2135,7 @@ void exit_usage(char* msg, char* argv0)
 
 void exit_version(char* argv0)
 {
-    fprintf(stderr, "%s %s\n%s\n", argv0, VERSION, "Copyright (c) 2019-2022, Vlad Me""\xc8""\x99""co\nAll rights reserved.");
+    fprintf(stderr, "%s %s\n%s\n", argv0, VERSION, "Copyright (c) 2019-2023, Vlad Me""\xc8""\x99""co\nAll rights reserved.");
     exit(1);
 }
 
