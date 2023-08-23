@@ -889,10 +889,15 @@ namespace CommandsImpl {
 
     void EQUALS(Range r, std::string tail)
     {
-        if(r.second < 1 || r.second > g_state.nlines) throw JakEDException("invalid range");
         std::stringstream ss;
-        ss << r.second << std::endl;
-        g_state.writeStringFn(ss.str());
+        if(g_state.nlines > 0) {
+            if(r.second < 1 || r.second > g_state.nlines) throw JakEDException("invalid range");
+            ss << r.second << std::endl;
+            g_state.writeStringFn(ss.str());
+        } else {
+            ss << 0 << std::endl;
+            g_state.writeStringFn(ss.str());
+        }
     }
 
     void commonW(Range r, std::string fname, const char* mode)
