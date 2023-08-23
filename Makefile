@@ -79,4 +79,4 @@ clean:
 	for %%i in (*.o *.obj *.exe *.pdb *.ilk cprintf.h license.cpp version.cpp) do @if exist %%i @erase /q %%i
 
 distclean: clean
-	rmdir/q/s JakED
+	IF EXIST JakEd rmdir/q/s JakED
