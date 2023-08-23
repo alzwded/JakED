@@ -22,6 +22,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <cstdarg>
 #include <optional>
 #include <deque>
+#include <iomanip>
 
 #include "swapfile.h"
 
@@ -34,6 +35,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "common.h"
 #include "cprintf.h"
 #include "shell.h"
+
+extern "C" const char LICENSE[];
 
 volatile std::atomic<bool> ctrlc = false;
 volatile std::atomic<bool> ctrlint = false;
@@ -2062,19 +2065,25 @@ namespace CommandsImpl {
         // set fileencoding=unix/dos
         // set backup=~
         // etc
+        const static std::map<std::string, std::pair<std::function<void(void)>, std::string>> xcommands {
+            { "crlf", { []() { g_state.lineEndings = LineEndings::CrLf; }, "switch to windows CRLF line endings" } },
+            { "lf", { []() { g_state.lineEndings = LineEndings::Lf; }, "switch to UNIX LF line endings" } },
+            { "license", { []() { g_state.writeStringFn(LICENSE); }, "print the license" } },
+        };
 
-        if(tail == "crlf") {
-            g_state.lineEndings = LineEndings::CrLf;
+        if(tail == "help") {
+            g_state.writeStringFn("Available commands:\n");
+            for(auto&& kv : xcommands) {
+                std::stringstream ss;
+                ss << std::setfill(' ') << std::setw(20) << std::left << kv.first << kv.second.second << std::endl;
+                g_state.writeStringFn(ss.str());
+            }
             return;
-        } else if(tail == "lf") {
-            g_state.lineEndings = LineEndings::Lf;
-            return;
-        } else if(tail == "help") {
-            g_state.writeStringFn(R"(Available commands:
-crlf                         windows CRLF line endings
-lf                           UNIX LF line endings
-)");
-            return;
+        }
+        if(auto found = xcommands.find(tail);
+                found != xcommands.end())
+        {
+            (found->second.first)();
         } else {
             throw JakEDException("Unknown extended command. See :help");
         }
