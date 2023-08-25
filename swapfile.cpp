@@ -41,7 +41,7 @@ class FileLine : public ILine
     int64_t m_pos;
 public:
 #   pragma pack(push, 1)
-    // I don't like counting, this let's me use offsetof()
+    // I don't like counting, this lets me use offsetof()
     struct LineFormat
     {
         int64_t next;
