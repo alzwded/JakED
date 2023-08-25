@@ -477,6 +477,7 @@ struct ConsoleReader {
 void Interactive_writeStringFn(std::string const& s)
 {
     fprintf(stdout, "%s", s.c_str());
+    fflush(stdout);
 }
 
 struct Range
@@ -520,6 +521,12 @@ private:
         , second(_2)
     {}
 }; // Range
+
+int SkipUntilWS(std::string const& s, int i)
+{
+    while(i < s.size() && s[i] != ' ' && s[i] != '\t') ++i;
+    return i;
+}
 
 int SkipWS(std::string const& s, int i)
 {
@@ -2070,13 +2077,18 @@ namespace CommandsImpl {
         // set fileencoding=unix/dos
         // set backup=~
         // etc
-        const static std::map<std::string, std::pair<std::function<void(void)>, std::string>> xcommands {
-            { "crlf", { []() { g_state.lineEndings = LineEndings::CrLf; }, "switch to windows CRLF line endings" } },
-            { "lf", { []() { g_state.lineEndings = LineEndings::Lf; }, "switch to UNIX LF line endings" } },
-            { "license", { []() { g_state.writeStringFn(LICENSE); }, "print the license" } },
+        const static std::map<std::string, std::pair<std::function<void(Range&, std::string&)>, std::string>> xcommands {
+            { "crlf", { [](Range&, std::string&) { g_state.lineEndings = LineEndings::CrLf; }, "switch to windows CRLF line endings" } },
+            { "lf", { [](Range&, std::string&) { g_state.lineEndings = LineEndings::Lf; }, "switch to UNIX LF line endings" } },
+            { "license", { [](Range&, std::string&) { g_state.writeStringFn(LICENSE); }, "print the license" } },
         };
 
-        if(tail == "help") {
+        auto ws = SkipUntilWS(tail, 0);
+        std::string command = tail.substr(0, ws);
+        cprintf<CPK::extended>("ws=%d command=%s, tail=%s, input=%s.\n", ws, command.c_str(), tail.substr(ws).c_str(), tail.c_str());
+        tail = tail.substr(ws);
+
+        if(command == "help") {
             g_state.writeStringFn(R"(Commands are usually of the syntax:
 <optional range><command character><optional additional options>
 
@@ -2174,12 +2186,14 @@ N,M!shell            when a range is specified, sends the text to the
             }
             return;
         }
-        if(auto found = xcommands.find(tail);
+        if(auto found = xcommands.find(command);
                 found != xcommands.end())
         {
-            (found->second.first)();
+            (found->second.first)(r, tail);
         } else {
-            throw JakEDException("Unknown extended command. See :help");
+            std::stringstream ss;
+            ss << "Unknown extended command `" << command << "'. See :help";
+            throw JakEDException(ss.str());
         }
 
     } // COLON

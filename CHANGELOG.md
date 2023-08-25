@@ -1,3 +1,10 @@
+0.9.6
+=====
+
+* always flush stdout after a line; there were issues doing `cat | jaked | cat`,
+  on the output side
+* parse extended commands
+
 0.9.5
 =====
 

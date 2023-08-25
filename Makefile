@@ -1,5 +1,5 @@
 JAKED_TEST_SANITY_CHECK=0
-VERSION=0.9.5
+VERSION=0.9.6
 
 HEADERS = swapfile.h cprintf.h common.h shell.h
 COMMON_SOURCES =  swapfile.cpp shell.cpp
@@ -23,6 +23,7 @@ regex \
 MandT \
 g \
 shell \
+extended \
 
 # leave above line blank
 
@@ -39,6 +40,7 @@ run_all_tests: jaked_test.exe jaked_debug.exe jaked.exe
 	jaked_test
 	cmd /c test\testWriteCommands.cmd
 	cmd /c test\testStdoutCommands.cmd
+	cmd /c test\testFullPipelining.cmd
 	REM nmake /NOLOGO sal
 
 sal:
