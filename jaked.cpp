@@ -1944,7 +1944,13 @@ namespace CommandsImpl {
                 if(second == 0) {
                     return EOF;
                 }
-                if(i > i1->length()) { // +1 intentional, see below
+                if(i == i1->length() + 1
+                        && g_state.lineEndings == LineEndings::CrLf)
+                {
+                    ++nBytes;
+                    ++i;
+                    return '\n';
+                } else if(i > i1->length()) { // +1 intentional, see below
                     second--;
                     i = 0;
                     i1 = i1->next();
@@ -1953,7 +1959,12 @@ namespace CommandsImpl {
                 ++nBytes;
                 if(i == i1->length()) {
                     ++i;
-                    return '\n'; // TODO \r\n?
+                    switch(g_state.lineEndings) {
+                    case LineEndings::CrLf:
+                        return '\r';
+                    case LineEndings::Lf:
+                        return '\n';
+                    }
                 }
                 if(i < i1->length()) {
                     return (char)i1->text().data()[i++];
